@@ -3,8 +3,6 @@
 %	===============================================================
 %	Copyright 1993-1999 by ROBERT F. STENGEL.  All rights reserved.
 
-% Hello World
-
 	clear
 	global GEAR CONTROL SPOIL u x V parhis
 
@@ -68,7 +66,7 @@
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
 	h =			9150;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
-	LINEAR = 	0;		% Linear model flag (= 1 to calculate F and G)
+	LINEAR = 	1;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
 	phi =		0;		% Body roll angle wrt earth, deg
 	psi =		0;		% Body yaw angle wrt earth, deg
@@ -190,105 +188,120 @@
 		Gmodel		=	dFdX(1:12,13:19)
 		save Fmodel
 		save Gmodel
-	end
-
+    end
+%     C = [1 1 1 1 1 1 1 1 1 1 1 1];
+    C = eye(12);
+    D = zeros(12, 7);
+    CSTR = ss(Fmodel, Gmodel, C, D);
+    
+%     CSTR.InputName = {'T_c','C_A_i'};
+%     CSTR.OutputName = {'T','C_A'};
+%     CSTR.StateName = {'C_A','T'};
+%     CSTR.InputGroup.MV = 1; % Manipulated variable
+%     CSTR.InputGroup.UD = 2; % Unmeasured distubances
+%     CSTR.OutputGroup.MO = 1; % Measured outputs
+%     CSTR.OutputGroup.UO = 2; % Unmeasured outputs
+    Ts = 1;
+    mpc_obj = mpc(CSTR, Ts);
+    mpc_obj.OV(5).Target=1;
+    
 %	Flight Path History
-	if SIMUL >= 1
-		tspan	=	[ti tf];
-		xo		=	x + delx
-		u		=	u + delu;
-		[t,x]	=	ode23('EoM',tspan,xo);
-
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,1))
-		xlabel('Time, s'), ylabel('Axial Velocity, m/s'), grid
-		subplot(2,2,2)
-		plot(t,x(:,2))
-		xlabel('Time, s'), ylabel('Side Velocity, m/s'), grid
-		subplot(2,2,3)
-		plot(t,x(:,3))
-		xlabel('Time, s'), ylabel('Normal Velocity, m/s'), grid
-		subplot(2,2,4)
-		plot(t,x(:,4))
-		xlabel('Time, s'), ylabel('North, m'), grid
-	
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,5))
-		xlabel('Time, s'), ylabel('East, m'), grid
-		subplot(2,2,2)
-		plot(t,-x(:,6))
-		xlabel('Time, s'), ylabel('Altitude, m'), grid
-		subplot(2,2,3)
-		plot(t,x(:,7) * 57.29578)
-		xlabel('Time, s'), ylabel('Roll Rate, deg/s'), grid
-		subplot(2,2,4)
-		plot(t,x(:,8) * 57.29578)
-		xlabel('Time, s'), ylabel('Pitch Rate, deg/s'), grid
-
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,9) * 57.29578)
-		xlabel('Time, s'), ylabel('Yaw Rate, deg/s'), grid
-		subplot(2,2,2)
-		plot(t,x(:,10) * 57.29578)
-		xlabel('Time, s'), ylabel('Roll Angle, deg'), grid
-		subplot(2,2,3)
-		plot(t,x(:,11) * 57.29578)
-		xlabel('Time, s'), ylabel('Pitch Angle, deg'), grid
-		subplot(2,2,4)
-		plot(t,x(:,12) * 57.29578)
-		xlabel('Time, s'), ylabel('Yaw Angle, deg'), grid
-		
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,1),t,x(:,2),t,x(:,3))
-		xlabel('Time, s'), ylabel('Velocity, m/s'), grid
-		subplot(2,2,2)
-		plot(t,x(:,4),t,x(:,5),t,-x(:,6))
-		xlabel('Time, s'), ylabel('Position, m'), grid
-		subplot(2,2,3)
-		plot(t,x(:,7) * 57.29578,t,x(:,8) * 57.29578,t,x(:,9) * 57.29578)
-		xlabel('Time, s'), ylabel('Angular Rate, deg/s'), grid
-		subplot(2,2,4)
-		plot(t,x(:,10) * 57.29578,t,x(:,11) * 57.29578,t,x(:,12) * 57.29578)
-		xlabel('Time, s'), ylabel('Angle, deg'), grid
-		
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,1),t,x(:,3) * 10)
-		xlabel('Time, s'), ylabel('u, 10w, m/s'), grid
-		subplot(2,2,2)
-		plot(t,-x(:,6))
-		xlabel('Time, s'), ylabel('Altitude, m'), grid
-		subplot(2,2,3)
-		plot(t,x(:,8) * 57.29578)
-		xlabel('Time, s'), ylabel('Pitch Rate, deg/s'), grid
-		subplot(2,2,4)
-		plot(t,x(:,11) * 57.29578)
-		xlabel('Time, s'), ylabel('Pitch Angle, deg'), grid		
-		
-		figure
-		subplot(2,2,1)
-		plot(t,x(:,2))
-		xlabel('Time, s'), ylabel('Side Velocity, m/s'), grid
-		subplot(2,2,2)
-		plot(t,x(:,5))
-		xlabel('Time, s'), ylabel('Crossrange, m'), grid
-		subplot(2,2,3)
-		plot(t,x(:,7) * 57.29578,t,x(:,9) * 57.29578)
-		xlabel('Time, s'), ylabel('Roll and Yaw Rates, deg/s'), grid
-		subplot(2,2,4)
-		plot(t,x(:,10) * 57.29578,t,x(:,12) * 57.29578)
-		xlabel('Time, s'), ylabel('Roll and Yaw Angles, deg'), grid	
-	
-		figure
-		subplot(1,2,1)
-		plot(x(:,7) * 57.29578,x(:,8) * 57.29578)
-		xlabel('Roll Rate, deg/s'), ylabel('Pitch Rate, deg/s'), grid
-		subplot(1,2,2)
-		plot(x(:,9) * 57.29578,x(:,8) * 57.29578)
-		xlabel('Yaw Rate, deg/s'), ylabel('Pitch Rate, deg/s'), grid
-		
-	end
+% 	if SIMUL >= 1
+% 		tspan	=	[ti tf];
+% 		xo		=	x + delx
+% 		u		=	u + delu;
+% 		[t,x]	=	ode23('EoM',tspan,xo);
+% 
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,1))
+% 		xlabel('Time, s'), ylabel('Axial Velocity, m/s'), grid
+% 		subplot(2,2,2)
+% 		plot(t,x(:,2))
+% 		xlabel('Time, s'), ylabel('Side Velocity, m/s'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,3))
+% 		xlabel('Time, s'), ylabel('Normal Velocity, m/s'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,4))
+% 		xlabel('Time, s'), ylabel('North, m'), grid
+% 	
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,5))
+% 		xlabel('Time, s'), ylabel('East, m'), grid
+% 		subplot(2,2,2)
+% 		plot(t,-x(:,6))
+% 		xlabel('Time, s'), ylabel('Altitude, m'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,7) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Roll Rate, deg/s'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,8) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Pitch Rate, deg/s'), grid
+% 
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,9) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Yaw Rate, deg/s'), grid
+% 		subplot(2,2,2)
+% 		plot(t,x(:,10) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Roll Angle, deg'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,11) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Pitch Angle, deg'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,12) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Yaw Angle, deg'), grid
+% 		
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,1),t,x(:,2),t,x(:,3))
+% 		xlabel('Time, s'), ylabel('Velocity, m/s'), grid
+% 		subplot(2,2,2)
+% 		plot(t,x(:,4),t,x(:,5),t,-x(:,6))
+% 		xlabel('Time, s'), ylabel('Position, m'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,7) * 57.29578,t,x(:,8) * 57.29578,t,x(:,9) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Angular Rate, deg/s'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,10) * 57.29578,t,x(:,11) * 57.29578,t,x(:,12) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Angle, deg'), grid
+% 		
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,1),t,x(:,3) * 10)
+% 		xlabel('Time, s'), ylabel('u, 10w, m/s'), grid
+% 		subplot(2,2,2)
+% 		plot(t,-x(:,6))
+% 		xlabel('Time, s'), ylabel('Altitude, m'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,8) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Pitch Rate, deg/s'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,11) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Pitch Angle, deg'), grid		
+% 		
+% 		figure
+% 		subplot(2,2,1)
+% 		plot(t,x(:,2))
+% 		xlabel('Time, s'), ylabel('Side Velocity, m/s'), grid
+% 		subplot(2,2,2)
+% 		plot(t,x(:,5))
+% 		xlabel('Time, s'), ylabel('Crossrange, m'), grid
+% 		subplot(2,2,3)
+% 		plot(t,x(:,7) * 57.29578,t,x(:,9) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Roll and Yaw Rates, deg/s'), grid
+% 		subplot(2,2,4)
+% 		plot(t,x(:,10) * 57.29578,t,x(:,12) * 57.29578)
+% 		xlabel('Time, s'), ylabel('Roll and Yaw Angles, deg'), grid	
+% 	
+% 		figure
+% 		subplot(1,2,1)
+% 		plot(x(:,7) * 57.29578,x(:,8) * 57.29578)
+% 		xlabel('Roll Rate, deg/s'), ylabel('Pitch Rate, deg/s'), grid
+% 		subplot(1,2,2)
+% 		plot(x(:,9) * 57.29578,x(:,8) * 57.29578)
+% 		xlabel('Yaw Rate, deg/s'), ylabel('Pitch Rate, deg/s'), grid
+% 		
+% 	end
