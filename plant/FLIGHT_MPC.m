@@ -3,8 +3,6 @@
 %	===============================================================
 %	Copyright 1993-1999 by ROBERT F. STENGEL.  All rights reserved.
 
-% Hello World
-
 	clear
 	global GEAR CONTROL SPOIL u x V parhis
 
