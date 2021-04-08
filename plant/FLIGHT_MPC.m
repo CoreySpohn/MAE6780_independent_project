@@ -190,9 +190,16 @@
 		save Gmodel
     end
 %     C = [1 1 1 1 1 1 1 1 1 1 1 1];
-    C = eye(12);
-    D = zeros(12, 7);
+
+    C = [0 0 0 1 0 0 0 0 0 0 0 0;
+         0 0 0 0 1 0 0 0 0 0 0 0;
+         0 0 0 0 0 1 0 0 0 0 0 0;
+         0 0 0 0 0 0 1 0 0 0 0 0;
+         0 0 0 0 0 0 0 1 0 0 0 0;
+         0 0 0 0 0 0 0 0 1 0 0 0];
+    D = zeros(6, 7);
     CSTR = ss(Fmodel, Gmodel, C, D);
+
     
 %     CSTR.InputName = {'T_c','C_A_i'};
 %     CSTR.OutputName = {'T','C_A'};
@@ -203,7 +210,36 @@
 %     CSTR.OutputGroup.UO = 2; % Unmeasured outputs
     Ts = 1;
     mpc_obj = mpc(CSTR, Ts);
-    mpc_obj.OV(5).Target=1;
+    % Starting location of the aircraft
+    mpc_obj.Model.Nominal.Y = [1000, 1000, 20000, 0, 0, 0];
+    % Starting control input
+    mpc_obj.Model.Nominal.U = [0, 0, 0, 400, 0, 0, 0];
+    % Throttle max and min
+    mpc_obj.MV(4).Max = 400;
+    mpc_obj.MV(4).Min = 0;
+    mpc_refsignal = zeros(11, 7);
+    
+%%
+    loop_steps = 10;
+    total_ref_signal = [];
+    for i = 1:loop_steps
+        if i == 1
+            step_ref_signal = [0 0 0 0 0 0];
+        else
+            step_ref_signal = [2000 0 10000 0 0 0];
+        end
+        total_ref_signal = [total_ref_signal; step_ref_signal];
+    end
+    options = mpcsimopt();
+    options.RefLookAhead = 'off';
+    options.MDLookAhead = 'off';
+    options.Constraints = 'on';
+    options.OpenLoop = 'off';
+    sim(mpc_obj, loop_steps, total_ref_signal, [], options)
+    [y, t, u, xp, xc, output_options] = sim(mpc_obj, loop_steps, total_ref_signal, [], options);
+    
+    % East vs North
+     plot(y(:,2), y(:,1))
     
 %	Flight Path History
 % 	if SIMUL >= 1
