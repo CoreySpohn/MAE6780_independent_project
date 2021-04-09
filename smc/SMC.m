@@ -8,8 +8,15 @@ function usm = SMC(t, x, xn, un, tau, L, ls)
 %   L   - Sliding-mode control scale
 %   ls  - Length scale
 
-    % Linearized model
-    global B
+    % Linearized dynamics
+    global A B
+%     thresh = 0.1 * ones(19, 1);
+%     xj = [x; un];
+% 	xdotj = LinModel(t,xj);
+% 	[dFdX,~] = numjac('LinModel', t, xj, xdotj, thresh, [], 0);
+%     A = dFdX(1:12,1:12);
+% 	B = dFdX(1:12,13:19);
+    
     
     % Sliding-surface matrices
     S = KinMat(x, tau, ls);
@@ -19,7 +26,10 @@ function usm = SMC(t, x, xn, un, tau, L, ls)
     sig = S*x - Sn*xn;
     
     % Sliding-mode control
-    usm = un + lsqminnorm(S*B, -L*sigmoid(sig));
+    v = lsqminnorm(S*B, -L*sigmoid(sig));
+    %usm(1:6) = un(1:6) + v;
+    %usm(7) = un(7);
+    usm = un + v;
     
 end
 
@@ -48,6 +58,6 @@ end
 % Sigmoid function
 function s = sigmoid(z)
 
-    s = (2/pi) * atan(z*100);
+    s = (2/pi) * atan(100*z);
 
 end
