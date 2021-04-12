@@ -4,6 +4,7 @@
 %	Copyright 1993-1999 by ROBERT F. STENGEL.  All rights reserved.
 
 	close all; clearvars; clc
+    set(0,'DefaultAxesFontSize',17);
 	global GEAR CONTROL SPOIL u x V parhis
 
 %	This is the EXECUTIVE FILE.  It contains the Main Program, which:
@@ -210,16 +211,22 @@
 %     CSTR.InputGroup.UD = 2; % Unmeasured distubances
 %     CSTR.OutputGroup.MO = 1; % Measured outputs
 %     CSTR.OutputGroup.UO = 2; % Unmeasured outputs
-    Ts = 10;
+    Ts = 1;
     mpc_obj = mpc(CSTR, Ts);
+    % specify prediction horizon
+    mpc1.PredictionHorizon = 2000; % sec
+    % specify control horizon
+    control_step = 10; % sec
+    mpc1.ControlHorizon = control_step;
     % Starting location of the aircraft
     %mpc_obj.Model.Nominal.Y = [1000, 1000, 20000, 0, 0, 0]; %Not Fully Observable State Space Model
-    mpc_obj.Model.Nominal.Y = [0, 0, 0, 0, 0, 10000, 0, 0, 0, 0, 0, 0];
+    mpc_obj.Model.Nominal.Y = [0, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0];
     % Starting control input
-    mpc_obj.Model.Nominal.U = [0, 0, 0, 400, 0, 0, 0];
+    mpc_obj.Model.Nominal.U = [0, 0, 0, 250, 0, 0, 0];
     % Throttle max and min
-    mpc_obj.MV(4).Max = 400;
-    mpc_obj.MV(4).Min = 0;
+    % mpc_obj.MV(4).Max = 400; % This constraint should actually be on the
+    % axial velocity state 1
+    % mpc_obj.MV(4).Min = 0;
     % Control Surface Angles limited to +or- 30 deg = 0.5236
     mpc_obj.MV(1).Max = 0.5236;
     mpc_obj.MV(1).Min = -0.5236;
@@ -233,15 +240,52 @@
     mpc_obj.MV(6).Min = -0.5236;
     mpc_obj.MV(7).Max = 0.5236;
     mpc_obj.MV(7).Min = -0.5236;
+    % Output Minimums i.e. We cannot fly into the ground, We cannot fly
+    % faster than 400 mph, pitch, roll, and yaw are limited as well
+    mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
+    mpc_obj.OV(1).Min = 0;
+    mpc_obj.OV(6).Max = 9000; % meter, maximum operational range
+    mpc_obj.OV(6).Min = 1000;
+    mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
+    mpc_obj.OV(10).Min = -3*pi/2;
+    mpc_obj.OV(11).Max = pi/2; % Pitch rad, the plane cannot flip over the minor axis
+    mpc_obj.OV(11).Min = -pi/2;
+    % Set Weights for Q and R
+    mpc_obj.Weights.MV = [.8 .8 .8 .8 .8 .8 .8];
+    mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
+    mpc_obj.Weights.OV = [0 0 0 .6 .6 .1 0 0 0 .5 .5 .5];
+    mpc_obj.Weights.ECR = 100000;
     mpc_refsignal = zeros(11, 7);
     
+    % LQR for comparison
+%     Q_lqr = [0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 .6 0 0 0 0 0 0 0 0;
+%           0 0 0 0 .6 0 0 0 0 0 0 0;
+%           0 0 0 0 0 .1 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 0 0 0;
+%           0 0 0 0 0 0 0 0 0 .1 0 0;
+%           0 0 0 0 0 0 0 0 0 0 .1 0;
+%           0 0 0 0 0 0 0 0 0 0 0 .1];
+%     R_lqr = .1*eye(7);
+%     K1 = lqr(CSTR,Q_lqr,R_lqr);
+    
 %%
-    loop_steps = 500;
+% Huricane Modeling
+h_tot_vel = 4.9; %m/s
+h_n_vel = 2.5; %m/s
+h_start_n = 5000; %Start at average width of hurricane in meter (300 miles) ~ 500000 [m]
+h_start_e = -5000;
+
+    loop_steps = 500; %Total Sim Time [sec]
     total_ref_signal = [];
     ref_signal = [zeros(3,loop_steps);...
-                  linspace(5000,-5000,loop_steps);...
-                  linspace(0,5000,loop_steps);...
-                  ones(1,loop_steps)*20000;...
+                  linspace(h_start_n,h_start_n+(h_n_vel)*loop_steps,loop_steps);...
+                  linspace(h_start_e,h_start_e+((h_tot_vel)^2-(h_n_vel)^2)^.5*loop_steps,loop_steps);...
+                  ones(1,loop_steps)*3000;...
                   zeros(6,loop_steps)]';
     for i = 1:loop_steps
 %         if i == 1
@@ -259,32 +303,66 @@
     options.Constraints = 'on';
     options.OpenLoop = 'off';
     sim(mpc_obj, loop_steps, total_ref_signal, [], options)
-    [y, t, u, xp, xc, output_options] = sim(mpc_obj, loop_steps, total_ref_signal, [], options);
+    [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, loop_steps, total_ref_signal, [], options);
     
+%     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
+%     LQR = sim(LQR_sys,zeros(length(tarray),7),tarray,[0, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0]')
+    
+%%
     % East vs North
     figure()
     %plot(y(:,2), y(:,1)) %Not Fully Observable State Space Model
-    plot(y(:,5), y(:,4))
+    plot(y(:,5), y(:,4),'r-.','Linewidth',2)
     hold on
-    plot(ref_signal(:,5), ref_signal(:,4))
+    %plot(LQR(:,5), LQR(:,4)) % LQR if we can get it working
+    plot(ref_signal(:,5), ref_signal(:,4),'b','Linewidth',2)
     title('Aircraft Trajectory to Hurricane Center')
-    legend('Aircraft Trajectory','Hurricane Trajectory')
+    legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
     ylabel('North [m]')
      
     figure()
     %plot3(y(:,2), y(:,1), y(:,3)) %Not Fully Observable State Space Model
-    plot3(y(:,5), y(:,4), y(:,6))
+    plot3(y(:,5), y(:,4), y(:,6),'r-.','Linewidth',2)
     hold on
-    plot3(ref_signal(:,5), ref_signal(:,4),ref_signal(:,6))
+    plot3(ref_signal(:,5), ref_signal(:,4),ref_signal(:,6),'b','Linewidth',2)
     
     title('Aircraft Trajectory to Hurricane Center')
-    legend('Aircraft Trajectory','Hurricane Trajectory')
+    legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
     ylabel('North [m]')
     zlabel('Altitude [m]')
     
-     
+    figure()
+    plot(t,(y(:,10)),'Linewidth',2)
+    hold on
+    plot(t,(y(:,11)),'Linewidth',2)
+    plot(t,(y(:,12)),'Linewidth',2)
+    title('Aircraft Trajectory to Hurricane Center')
+    legend('Roll','Pitch','Yaw')
+    xlabel('Time [sec]')
+    ylabel('Angle [deg]')
+    
+    
+    figure()
+    subplot(2,1,1)
+    line(t,rad2deg(u_t(:,1)))
+    hold on
+    line(t,rad2deg(u_t(:,2)))
+    line(t,rad2deg(u_t(:,3)))
+    line(t,rad2deg(u_t(:,5)))
+    line(t,rad2deg(u_t(:,6)))
+    line(t,rad2deg(u_t(:,7)))
+    title('Control Surface Angles')
+    xlabel('Time [sec]')
+    ylabel('Angle [deg]')
+    legend('Elevator','Aileron','Rudder','Asymmetric Spoiler','Flap','Stabilator')
+    
+    subplot(2,1,2)
+    line(t,u_t(:,4))
+    title('Throttle')
+    xlabel('Time [sec]')
+    ylabel('Throttle [T]')
     
 	%Flight Path History
 	if SIMUL >= 1
