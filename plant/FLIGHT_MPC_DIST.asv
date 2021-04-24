@@ -110,20 +110,6 @@
 	thetar	=	theta * .01745329;
 	psir	=	psi * .01745329;
     
-%   Initialize State Before the First Loop
-    x	=	[V * cos(alpha) * cos(beta)
-        V * sin(beta)
-        V * sin(alpha) * cos(beta)
-        xe
-        ye
-        ze
-        p * .01745329
-        q * .01745329
-        r * .01745329
-        phir
-        thetar
-        psir];
-
 %   Hurricane Initial Conditions and Parameters
     hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
@@ -144,9 +130,9 @@
 %   Angle of Hurricane Path with respect to the Earth Frame's East Axis
 
 %   Start of the Iterative Loop
-    loop_steps = 500; %Number of Control Horizon Iterations
-    state = []; % Set up variable to contain the state variable after each loop 
-    control = []; % Set up variable to contain the control variables after each loop
+loop_steps = 500; %Number of Control Horizon Iterations
+state = []; % Set up variable to contain the state variable after each loop 
+control = []; % Set up 
 for i = 1:loop_steps
     % Calculate the Current Wind Disturbances
 	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
@@ -334,8 +320,6 @@ for i = 1:loop_steps
     options.OpenLoop = 'off';
     sim(mpc_obj, 1, total_ref_signal, [], options)
     [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, loop_steps, total_ref_signal, [], options);
-    state = [state;y];
-    control = [control;u_t];
 end
     
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);

@@ -29,7 +29,7 @@ Rmax = hurr_para.Rmax*1000; % Convert from km to m
 % Calculate the euclidean distance between the hurricane center and the
 % aircraft position
 r = ((x(5)-z(1))^2+(x(4)-z(2))^2)^.5;
-theta = atan2((x(4)-z(2)),(x(5)-z(1)));
+theta = at
 
 % Calculate the magnitude of the radial velocity, Vr, at the radial distance
 if r<Rmax
@@ -38,8 +38,8 @@ else
     Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
 end
 % Use Trigonometry to Split Vr into x and y components
-dx = Vr*0.277778*cos(theta); %Convert from km/h to m/s
-dy = Vr*0.277778*sin(theta); %Convert from km/h to m/s
+dx = Vr*0.277778; %Convert from km/h to m/s
+dy = Vr*0.277778; %Convert from km/h to m/s
 
 % Calculate the magnitude of the vertical velocity
 % This seems to be a function of distance from the eye wall and height in
@@ -77,9 +77,9 @@ windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
 	windx	=	[dy dy dy dy dy dy dy dy dy dy];	% Northerly wind, m/s
 	windy	=	[dx dx dx dx dx dx dx dx dx dx];	% Easterly wind, m/s
 	windz	=	[dz dz dz dz dz dz dz dz dz dz];	% Vertical wind. m/s
-	height  =   -x(6);
+	
 	winde	=	[interp1(windh,windx,height)
 				interp1(windh,windy,height)
 				interp1(windh,windz,height)];	% Earth-relative frame
-	HEB		=	DCM(x(10),x(11),x(12));
+	HEB		=	DCM(phir,thetar,psir);
 	windb	=	HEB * winde;					% Body-axis frame
