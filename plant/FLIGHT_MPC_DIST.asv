@@ -110,6 +110,28 @@
 	thetar	=	theta * .01745329;
 	psir	=	psi * .01745329;
     
+%   Initialize State Before the First Loop
+    x	=	[V * cos(alpha) * cos(beta)
+        V * sin(beta)
+        V * sin(alpha) * cos(beta)
+        xe
+        ye
+        ze
+        p * .01745329
+        q * .01745329
+        r * .01745329
+        phir
+        thetar
+        psir];
+    
+    u	=	[dE * .01745329
+        dA * .01745329
+        dR * .01745329
+        dT
+        dAS * .01745329
+        dF * .01745329
+        dS * .01745329];
+
 %   Hurricane Initial Conditions and Parameters
     hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
@@ -117,7 +139,7 @@
     hurr_para.Rmax = 47; % km The units on this are important!
 
     % Set up ODE 45 outside the iterative loop,
-    hurr_prop = @(t,z) HurricaneEOM(t,z,p);
+    hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
     n = 100;
     tf = 10; % This should equal the control horizon
     tarray = linspace(0,tf,n);
@@ -130,35 +152,22 @@
 %   Angle of Hurricane Path with respect to the Earth Frame's East Axis
 
 %   Start of the Iterative Loop
-loop_steps = 500; %Number of Control Horizon Iterations
-state = []; % Set up variable to contain the state variable after each loop 
-control = []; % Set up 
+    loop_steps = 500; %Number of Control Horizon Iterations
+    state = []; % Set up variable to contain the state variable after each loop 
+    control = []; % Set up variable to contain the control variables after each loop
+    z_total = []; % Set up variable to contain the hurricane track after each loop
 for i = 1:loop_steps
     % Calculate the Current Wind Disturbances
 	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
 	alphar	=	alpha * .01745329;
 	betar	=	beta * .01745329;
 
-	x	=	[V * cos(alphar) * cos(betar) - windb(1)
-			V * sin(betar) - windb(2)
-			V * sin(alphar) * cos(betar) - windb(3)
-			xe
-			ye
-			ze
-			p * .01745329
-			q * .01745329
-			r * .01745329
-			phir
-			thetar
-			psir];
+	x	=	x - [windb(1);...
+                 windb(2);...
+			     windb(3);...
+                 zeros(9,1)];
 	
-	u	=	[dE * .01745329
-			dA * .01745329
-			dR * .01745329
-			dT
-			dAS * .01745329
-			dF * .01745329
-			dS * .01745329];
+	u	=	u;
 
 %	Trim Calculation (for Steady Level Flight at Initial V and h)
 	if TRIM >= 1
@@ -210,8 +219,8 @@ for i = 1:loop_steps
 		xj		=	[x;u];
 		xdotj		=	LinModel(ti,xj);
 		[dFdX,fac]	=	numjac('LinModel',ti,xj,xdotj,thresh,[],0);
-		Fmodel		=	dFdX(1:12,1:12)
-		Gmodel		=	dFdX(1:12,13:19)
+		Fmodel		=	dFdX(1:12,1:12);
+		Gmodel		=	dFdX(1:12,13:19);
 		save Fmodel
 		save Gmodel
     end
@@ -304,8 +313,8 @@ for i = 1:loop_steps
     % current control horizon
     z = ode45(hurr_prop,tarray,z_hurr,opts);
     zarray = deval(z,tarray);
-    z_total = [z_total;zarray];
-    z_hurr = zarray(end,:); % Current Hurricane State
+    z_total = [z_total;zarray'];
+    z_hurr = zarray(:,end)'; % Current Hurricane State
 
     ref_signal = [zeros(3,1);...
                   z_hurr(2);... % Hurricane Center Position, North
@@ -318,8 +327,12 @@ for i = 1:loop_steps
     options.MDLookAhead = 'off';
     options.Constraints = 'on';
     options.OpenLoop = 'off';
-    sim(mpc_obj, 1, total_ref_signal, [], options)
-    [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, loop_steps, total_ref_signal, [], options);
+    %sim(mpc_obj, 1, ref_signal, [], options)
+    [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, 1, ref_signal, [], options);
+    x = y';
+    state = [state;y];
+    u = u_t';
+    control = [control;u_t];
 end
     
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
@@ -329,10 +342,10 @@ end
     % East vs North
     figure()
     %plot(y(:,2), y(:,1)) %Not Fully Observable State Space Model
-    plot(y(:,5), y(:,4),'r-.','Linewidth',2)
+    plot(state(:,5), state(:,4),'r-.','Linewidth',2)
     hold on
     %plot(LQR(:,5), LQR(:,4)) % LQR if we can get it working
-    plot(ref_signal(:,5), ref_signal(:,4),'b','Linewidth',2)
+    plot(z_total(:,1), z_total(:,2),'b','Linewidth',2)
     title('Aircraft Trajectory to Hurricane Center')
     legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
@@ -340,9 +353,9 @@ end
      
     figure()
     %plot3(y(:,2), y(:,1), y(:,3)) %Not Fully Observable State Space Model
-    plot3(y(:,5), y(:,4), y(:,6),'r-.','Linewidth',2)
+    plot3(state(:,5), state(:,4), state(:,6),'r-.','Linewidth',2)
     hold on
-    plot3(ref_signal(:,5), ref_signal(:,4),ref_signal(:,6),'b','Linewidth',2)
+    plot3(z_total(:,1), z_total(:,2),3000*ones(length(z_total(:,2)),1),'b','Linewidth',2)
     
     title('Aircraft Trajectory to Hurricane Center')
     legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
@@ -355,7 +368,7 @@ end
     hold on
     plot(t,(y(:,11)),'Linewidth',2)
     plot(t,(y(:,12)),'Linewidth',2)
-    title('Aircraft Trajectory to Hurricane Center')
+    title('Aircraft Roll Pitch Yaw')
     legend('Roll','Pitch','Yaw')
     xlabel('Time [sec]')
     ylabel('Angle [deg]')
