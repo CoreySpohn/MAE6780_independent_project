@@ -3,7 +3,7 @@
 %	===============================================================
 %	Copyright 1993-1999 by ROBERT F. STENGEL.  All rights reserved.
 
-%	close all; clearvars; clc
+	close all; clearvars; clc
     set(0,'DefaultAxesFontSize',17);
 	global GEAR CONTROL SPOIL u x V parhis
 
@@ -65,7 +65,7 @@
 	dS = 		-1.948;	% Stabilator setting, deg
 	dT = 		0.1919;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
-	h =			9150;	% Altitude above Sea Level, m
+	h =			1000;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
 	LINEAR = 	1;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
@@ -111,9 +111,9 @@
 	psir	=	psi * .01745329;
     
 %   Initialize State Before the First Loop
-    x	=	[V * cos(alpha) * cos(beta)
-        V * sin(beta)
-        V * sin(alpha) * cos(beta)
+    x	=	[V * cosd(alpha) * cosd(beta)
+        V * sind(beta)
+        V * sind(alpha) * cosd(beta)
         xe
         ye
         ze
@@ -140,9 +140,9 @@
 
     % Set up ODE 45 outside the iterative loop,
     hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
-    n = 100;
-    tf = 10; % This should equal the control horizon
-    tarray = linspace(0,tf,n);
+%     n = 100;
+%     tf = 10; % This should equal the control horizon
+%     tarray = linspace(0,tf,n);
     smallnumber=1e-10;
     opts=odeset('Abstol',smallnumber,'RelTol',smallnumber);
 
@@ -152,22 +152,43 @@
 %   Angle of Hurricane Path with respect to the Earth Frame's East Axis
 
 %   Start of the Iterative Loop
-    loop_steps = 500; %Number of Control Horizon Iterations
-    state = []; % Set up variable to contain the state variable after each loop 
-    control = []; % Set up variable to contain the control variables after each loop
+    Tstop = 50; % Total Simulation Time
+    Ts = 1; % Sample Time
+    p = 10; % Predictive Horizon
+    c = 5; % Control Horizon
+    tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
+    state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
+    control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
     z_total = []; % Set up variable to contain the hurricane track after each loop
-for i = 1:loop_steps
+     
+    mpc_options = mpcmoveopt();
+    mpc_options.MVMax = [0.5236 0.5236 0.5236 Inf 0.5236 0.5236 0.5236];
+    mpc_options.MVMin = [-0.5236 -0.5236 -0.5236 0 -0.5236 -0.5236 -0.5236];
+    mpc_options.OutputMax = [175 Inf Inf Inf Inf 0 Inf Inf Inf 3*pi/2 pi/2 Inf];
+    mpc_options.OutputMin = [0 -Inf -Inf -Inf -Inf -9000 -Inf -Inf -Inf -3*pi/2 -pi/2 -Inf];
+    
+%     mpcsimopt(); Switch betweemn sim and mpcmove
+%     options.RefLookAhead = 'on';
+%     options.MDLookAhead = 'off';
+%     options.Constraints = 'on';
+%     options.OpenLoop = 'off';
+    % We assume we have perfect knowledge of the states 
+    C = eye(12);
+    D = zeros(12,7);
+for i = 1:round(Tstop/Ts)+1
+    % Calculate current output before applying wind disturbances
+    y = C*x+D*u;
+    
     % Calculate the Current Wind Disturbances
 	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
 	alphar	=	alpha * .01745329;
 	betar	=	beta * .01745329;
 
+    % Add the Unmeasured Disturbance Going into Plant
 	x	=	x - [windb(1);...
                  windb(2);...
 			     windb(3);...
-                 zeros(9,1)]
-	
-	u	=	u
+                 zeros(9,1)];
 
 %	Trim Calculation (for Steady Level Flight at Initial V and h)
 	if TRIM >= 1
@@ -233,8 +254,7 @@ for i = 1:loop_steps
 %          0 0 0 0 0 0 0 1 0 0 0 0;
 %          0 0 0 0 0 0 0 0 1 0 0 0];
     %D = zeros(6, 7);
-    C = eye(12);
-    D = zeros(12,7);
+
     CSTR = ss(Fmodel, Gmodel, C, D);
 
     
@@ -245,18 +265,18 @@ for i = 1:loop_steps
 %     CSTR.InputGroup.UD = 2; % Unmeasured distubances
 %     CSTR.OutputGroup.MO = 1; % Measured outputs
 %     CSTR.OutputGroup.UO = 2; % Unmeasured outputs
-    Ts = 1;
-    mpc_obj = mpc(CSTR, Ts);
-    % specify prediction horizon
-    mpc1.PredictionHorizon = 2000; % sec
-    % specify control horizon
-    control_step = 10; % sec
-    mpc1.ControlHorizon = control_step;
-    % Starting location of the aircraft
+%     Ts = 1;
+    mpc_obj = mpc(CSTR, Ts,p,c);
+%     % specify prediction horizon
+%     mpc1.PredictionHorizon = p; % sec
+%     % specify control horizon
+%     mpc1.ControlHorizon = c;
+    
+    % Previous State of the aircraft
     %mpc_obj.Model.Nominal.Y = [1000, 1000, 20000, 0, 0, 0]; %Not Fully Observable State Space Model
-    mpc_obj.Model.Nominal.Y = [0, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0];
+    mpc_obj.Model.Nominal.Y = state(end,:); % Use last state, no disturbances included
     % Starting control input
-    mpc_obj.Model.Nominal.U = [0, 0, 0, 250, 0, 0, 0];
+    mpc_obj.Model.Nominal.U = control(end,:); % Use last control
     % Throttle max and min
     % mpc_obj.MV(4).Max = 400; % This constraint should actually be on the
     % axial velocity state 1
@@ -266,6 +286,8 @@ for i = 1:loop_steps
     mpc_obj.MV(1).Min = -0.5236;
     mpc_obj.MV(2).Max = 0.5236;
     mpc_obj.MV(2).Min = -0.5236;
+    mpc_obj.MV(4).Max = Inf;
+    mpc_obj.MV(4).Min = 0;
     mpc_obj.MV(3).Max = 0.5236;
     mpc_obj.MV(3).Min = -0.5236;
     mpc_obj.MV(5).Max = 0.5236;
@@ -278,8 +300,8 @@ for i = 1:loop_steps
     % faster than 400 mph, pitch, roll, and yaw are limited as well
     mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
     mpc_obj.OV(1).Min = 0;
-    mpc_obj.OV(6).Max = 9000; % meter, maximum operational range
-    mpc_obj.OV(6).Min = 1000;
+    mpc_obj.OV(6).Max = 0; % meter, maximum operational range
+    mpc_obj.OV(6).Min = -9000;
     mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
     mpc_obj.OV(10).Min = -3*pi/2;
     mpc_obj.OV(11).Max = pi/2; % Pitch rad, the plane cannot flip over the minor axis
@@ -289,7 +311,11 @@ for i = 1:loop_steps
     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
     mpc_obj.Weights.OV = [0 0 0 .6 .6 .1 0 0 0 .5 .5 .5];
     mpc_obj.Weights.ECR = 100000;
-    mpc_refsignal = zeros(11, 7);
+%     mpc_refsignal = zeros(11, 7);
+    if i == 1
+        xmpc = mpcstate(mpc_obj);
+        xmpc.Plant = state(end,:);        
+    end
     
     % LQR for comparison
 %     Q_lqr = [0 0 0 0 0 0 0 0 0 0 0 0;
@@ -313,26 +339,30 @@ for i = 1:loop_steps
     % current control horizon
     z = ode45(hurr_prop,tarray,z_hurr,opts);
     zarray = deval(z,tarray);
-    z_total = [z_total;zarray'];
-    z_hurr = zarray(:,end)'; % Current Hurricane State
+    index = find(tarray==c); % Find what iteration has the control horizon
+    z_hurr = zarray(:,index)'; % Current Hurricane State At End of Control Period
+    z_total = [z_total;zarray(:,1:index)']; % Store up through the control horizon
+    % Reference Signal Out to the Prediction Horizon MPC controller
+    % calculation
+    ref_signal = [zeros(3,length(zarray(1,:)));...
+                  zarray(2,:);... % Hurricane Center Position, North
+                  zarray(1,:);... % Hurricane Center Position, East
+                  -3000*ones(1,length(zarray(1,:)));... % Desired Flight Height
+                  zeros(6,length(zarray(1,:)))]';
 
-    ref_signal = [zeros(3,1);...
-                  z_hurr(2);... % Hurricane Center Position, North
-                  z_hurr(1);... % Hurricane Center Position, East
-                  3000;... % Desired Flight Height
-                  zeros(6,1)]';
-    
-    options = mpcsimopt();
-    options.RefLookAhead = 'off';
-    options.MDLookAhead = 'off';
-    options.Constraints = 'on';
-    options.OpenLoop = 'off';
-    %sim(mpc_obj, 1, ref_signal, [], options)
-    [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, 1, ref_signal, [], options);
-    x = y'
-    state = [state;y];
-    u = u_t'
-    control = [control;u_t];
+    % Attempt with Simulation Function
+%     sim(mpc_obj, 1, ref_signal, [], options)
+%     [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, 1, ref_signal, [], options);
+%     x = y'
+%     state = [state;y];
+%     u = u_t'
+%     control = [control;u_t];
+    % Attempt with MPC Move with Explicit Defintion of Time
+    [u,Info] = mpcmove(mpc_obj, xmpc, y, ref_signal, [], mpc_options);
+%     index = find(Info.Topt==c);
+    x = xmpc.Plant; % Info.Xopt(index,1:12)';
+    state = [state;x'];
+    control = [control;u'];
 end
     
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
@@ -353,7 +383,7 @@ end
      
     figure()
     %plot3(y(:,2), y(:,1), y(:,3)) %Not Fully Observable State Space Model
-    plot3(state(:,5), state(:,4), state(:,6),'r-.','Linewidth',2)
+    plot3(state(:,5), state(:,4), -1*state(:,6),'r-.','Linewidth',2)
     hold on
     plot3(z_total(:,1), z_total(:,2),3000*ones(length(z_total(:,2)),1),'b','Linewidth',2)
     
@@ -376,20 +406,20 @@ end
     
     figure()
     subplot(2,1,1)
-    line(t,rad2deg(control(:,1)))
+    stairs(t,rad2deg(control(:,1)))
     hold on
-    line(t,rad2deg(control(:,2)))
-    line(t,rad2deg(control(:,3)))
-    line(t,rad2deg(control(:,5)))
-    line(t,rad2deg(control(:,6)))
-    line(t,rad2deg(control(:,7)))
+    stairs(t,rad2deg(control(:,2)))
+    stairs(t,rad2deg(control(:,3)))
+    stairs(t,rad2deg(control(:,5)))
+    stairs(t,rad2deg(control(:,6)))
+    stairs(t,rad2deg(control(:,7)))
     title('Control Surface Angles')
     xlabel('Time [sec]')
     ylabel('Angle [deg]')
     legend('Elevator','Aileron','Rudder','Asymmetric Spoiler','Flap','Stabilator')
     
     subplot(2,1,2)
-    line(t,control(:,4))
+    stairs(t,control(:,4))
     title('Throttle')
     xlabel('Time [sec]')
     ylabel('Throttle [T]')

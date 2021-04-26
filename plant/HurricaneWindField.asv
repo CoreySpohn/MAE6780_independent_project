@@ -37,17 +37,21 @@ if r<Rmax
 else
     Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
 end
+
+% Create Noise of +-10m/s for each portion of velocity
+noise = -10 + (10+10)*rand(3,1);
+
 % Use Trigonometry to Split Vr into x and y components
-dx = Vr*0.277778*cos(theta); %Convert from km/h to m/s
-dy = Vr*0.277778*sin(theta; %Convert from km/h to m/s
+dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
+dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
 
 % Cross with <0,0,1> to get the tangential component
-cross(
+Vt = cross([dx,dy,0],[0,0,1]);
 
 % Calculate the magnitude of the vertical velocity
 % This seems to be a function of distance from the eye wall and height in
 % the hurricane - Initially set to be 15 m/s universally
-dz = 15; %m/s
+dz = 15+noise(3); %m/s
 
 % [X,Y] = meshgrid(-240:20:240);
 % for i = 1:length(X(1,:))
@@ -76,11 +80,15 @@ dz = 15; %m/s
 % ylabel('North [km]')
 
 % Assume the wind is uniform in height
-windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
-	windx	=	[dy dy dy dy dy dy dy dy dy dy];	% Northerly wind, m/s
-	windy	=	[dx dx dx dx dx dx dx dx dx dx];	% Easterly wind, m/s
+    windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
+	windx	=	[Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2)];	% Northerly wind, m/s
+	windy	=	[Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1)];	% Easterly wind, m/s
 	windz	=	[dz dz dz dz dz dz dz dz dz dz];	% Vertical wind. m/s
-	height  =   -x(6);
+    if x(6)<0
+        height = -x(6);
+    else
+        height = x(6);
+    end
 	winde	=	[interp1(windh,windx,height)
 				interp1(windh,windy,height)
 				interp1(windh,windz,height)];	% Earth-relative frame

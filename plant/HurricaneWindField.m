@@ -80,11 +80,11 @@ dz = 15+noise(3); %m/s
 % ylabel('North [km]')
 
 % Assume the wind is uniform in height
-windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
+    windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
 	windx	=	[Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2)];	% Northerly wind, m/s
 	windy	=	[Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1)];	% Easterly wind, m/s
 	windz	=	[dz dz dz dz dz dz dz dz dz dz];	% Vertical wind. m/s
-	height  =   -x(6);
+    height = abs(x(6));
 	winde	=	[interp1(windh,windx,height)
 				interp1(windh,windy,height)
 				interp1(windh,windz,height)];	% Earth-relative frame
