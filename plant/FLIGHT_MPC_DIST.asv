@@ -5,7 +5,7 @@
 
 	close all; clearvars; clc
     set(0,'DefaultAxesFontSize',17);
-	global GEAR CONTROL SPOIL u x V parhis
+	global GEAR CONTROL SPOIL u x V parhis %windb
 
 %	This is the EXECUTIVE FILE.  It contains the Main Program, which:
 %		Defines initial conditions
@@ -75,7 +75,7 @@
 	r =			0;		% Body-axis yaw rate, deg/s
 	SIMUL =		0;		% Flight path flag (= 1 for nonlinear simulation)
 	SPOIL =		0;		% Symmetric Spoiler DEPLOYED (= 1) or CLOSED (= 0)
-	tf =		30;		% Final time, sec
+	tfinal =		30;		% Final time, sec
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		0;		% Trim flag (= 1 to calculate trim)
@@ -109,6 +109,8 @@
 	phir	=	phi * .01745329;
 	thetar	=	theta * .01745329;
 	psir	=	psi * .01745329;
+    alphar	=	alpha * .01745329;
+	betar	=	beta * .01745329;
     
 %   Initialize State Before the First Loop
     x	=	[V * cosd(alpha) * cosd(beta)
@@ -131,66 +133,8 @@
         dAS * .01745329
         dF * .01745329
         dS * .01745329]
-
-%   Hurricane Initial Conditions and Parameters
-    hurr_para.linvel = 4.9; %m/s
-    hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
-    hurr_para.Vmax = 252; %km/hr The units on this are important!
-    hurr_para.Rmax = 47; % km The units on this are important!
-
-    % Set up ODE 45 outside the iterative loop,
-    hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
-%     n = 100;
-%     tf = 10; % This should equal the control horizon
-%     tarray = linspace(0,tf,n);
-    smallnumber=1e-10;
-    opts=odeset('Abstol',smallnumber,'RelTol',smallnumber);
-
-    z_hurr = [ -5000, 5000, deg2rad(45)]; % Initial hurricane conditions
-%   North position of center of mass WRT Earth, xe, m
-%	East position of center of mass WRT Earth, ye, m
-%   Angle of Hurricane Path with respect to the Earth Frame's East Axis
-
-%   Start of the Iterative Loop
-    Tstop = 50; % Total Simulation Time
-    Ts = 1; % Sample Time
-    p = 10; % Predictive Horizon
-    c = 5; % Control Horizon
-    tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
-    state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
-    control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
-    z_total = []; % Set up variable to contain the hurricane track after each loop
-     
-    mpc_options = mpcmoveopt();
-    mpc_options.MVMax = [0.5236 0.5236 0.5236 Inf 0.5236 0.5236 0.5236];
-    mpc_options.MVMin = [-0.5236 -0.5236 -0.5236 0 -0.5236 -0.5236 -0.5236];
-    mpc_options.OutputMax = [175 Inf Inf Inf Inf 0 Inf Inf Inf 3*pi/2 pi/2 Inf];
-    mpc_options.OutputMin = [0 -Inf -Inf -Inf -Inf -9000 -Inf -Inf -Inf -3*pi/2 -pi/2 -Inf];
     
-%     mpcsimopt(); Switch betweemn sim and mpcmove
-%     options.RefLookAhead = 'on';
-%     options.MDLookAhead = 'off';
-%     options.Constraints = 'on';
-%     options.OpenLoop = 'off';
-    % We assume we have perfect knowledge of the states 
-    C = eye(12);
-    D = zeros(12,7);
-for i = 1:round(Tstop/Ts)+1
-    % Calculate current output before applying wind disturbances
-    y = C*x+D*u;
-    
-    % Calculate the Current Wind Disturbances
-	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
-	alphar	=	alpha * .01745329;
-	betar	=	beta * .01745329;
-
-    % Add the Unmeasured Disturbance Going into Plant
-	x	=	x - [windb(1);...
-                 windb(2);...
-			     windb(3);...
-                 zeros(9,1)];
-
-%	Trim Calculation (for Steady Level Flight at Initial V and h)
+    %	Trim Calculation (for Steady Level Flight at Initial V and h)
 	if TRIM >= 1
 		'TRIM'
 		parhis	=	[];
@@ -231,7 +175,20 @@ for i = 1:round(Tstop/Ts)+1
 				optPar(3)
 				x(12)]
 		format short
-	end
+    end
+    
+%   Start of the Iterative Loop
+    Tstop = 300; % Total Simulation Time
+    Ts = 5; % Sample Time
+    p = 30; % Predictive Horizon
+    c = 3; % Control Horizon
+    tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
+    state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
+    control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
+    z_total = []; % Set up variable to contain the hurricane track after each loop
+    % We assume we have perfect knowledge of the states 
+    C = eye(12);
+    D = zeros(12,7);
 
 %	Stability-and-Control Derivative Calculation
    	if LINEAR >= 1
@@ -240,128 +197,177 @@ for i = 1:round(Tstop/Ts)+1
 		xj		=	[x;u];
 		xdotj		=	LinModel(ti,xj);
 		[dFdX,fac]	=	numjac('LinModel',ti,xj,xdotj,thresh,[],0);
-		Fmodel		=	dFdX(1:12,1:12);
-		Gmodel		=	dFdX(1:12,13:19);
+		Fmodel		=	real(dFdX(1:12,1:12));
+		Gmodel		=	real(dFdX(1:12,13:19));
 		save Fmodel
 		save Gmodel
+        % Add three extra columns to Gmodel for the unmeasured disturbances
+        disturbance_model = [eye(3);zeros(9,3)];
+        Gmodel = [Gmodel, disturbance_model];
+        D = zeros(12,10);
+        CSTR = ss(Fmodel, Gmodel, C, D);
+        CSTR = setmpcsignals(CSTR,'MV',[1 2 3 4 5 6 7],'UD',[8 9 10]);
+        mpc_obj = mpc(CSTR, Ts,p,c);
+        % Previous State of the aircraft
+        %mpc_obj.Model.Nominal.Y = [1000, 1000, 20000, 0, 0, 0]; %Not Fully Observable State Space Model
+        mpc_obj.Model.Nominal.Y = state(end,:); % Use last state, no disturbances included
+        % Starting control input
+        mpc_obj.Model.Nominal.U = [control(end,:) 0 0 0]; % Use last control
+        % Set Weights for Q and R
+        mpc_obj.Weights.MV = [.9 .9 .9 .7 .9 .9 .9];
+    %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
+        mpc_obj.Weights.OV = [0.001 0.001 0.001 .9 .9 .4 0.001 0.001 0.001 .2 .3 .2];
+    %     mpc_obj.Weights.ECR = 100000;
+    else
+        mpc_obj = nlmpc(12,12,7);%,'MV',[1 2 3 4 5 6 7],'UD',[1 2 3]);
+        mpc_obj.Ts = Ts;
+        mpc_obj.PredictionHorizon = p;
+        mpc_obj.ControlHorizon = c;
+        mpc_obj.Model.StateFcn = @(x,u) EOM(t,x,u);
+        % Set Weights for Q and R
+        mpc_obj.Weights.ManipulatedVariables = [.9 .9 .9 .7 .9 .9 .9];
+    %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
+        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .9 .9 .9 0.001 0.001 0.001 .2 .3 .2];
+    %     mpc_obj.Weights.ECR = 100000;
     end
-%     C = [1 1 1 1 1 1 1 1 1 1 1 1];
-
-    %C = [0 0 0 1 0 0 0 0 0 0 0 0;
-%          0 0 0 0 1 0 0 0 0 0 0 0;
-%          0 0 0 0 0 1 0 0 0 0 0 0;
-%          0 0 0 0 0 0 1 0 0 0 0 0;
-%          0 0 0 0 0 0 0 1 0 0 0 0;
-%          0 0 0 0 0 0 0 0 1 0 0 0];
-    %D = zeros(6, 7);
-
-    CSTR = ss(Fmodel, Gmodel, C, D);
-
-    
-%     CSTR.InputName = {'T_c','C_A_i'};
-%     CSTR.OutputName = {'T','C_A'};
-%     CSTR.StateName = {'C_A','T'};
-%     CSTR.InputGroup.MV = 1; % Manipulated variable
-%     CSTR.InputGroup.UD = 2; % Unmeasured distubances
-%     CSTR.OutputGroup.MO = 1; % Measured outputs
-%     CSTR.OutputGroup.UO = 2; % Unmeasured outputs
-%     Ts = 1;
-    mpc_obj = mpc(CSTR, Ts,p,c);
-%     % specify prediction horizon
-%     mpc1.PredictionHorizon = p; % sec
-%     % specify control horizon
-%     mpc1.ControlHorizon = c;
-    
-    % Previous State of the aircraft
-    %mpc_obj.Model.Nominal.Y = [1000, 1000, 20000, 0, 0, 0]; %Not Fully Observable State Space Model
-    mpc_obj.Model.Nominal.Y = state(end,:); % Use last state, no disturbances included
-    % Starting control input
-    mpc_obj.Model.Nominal.U = control(end,:); % Use last control
+  
     % Throttle max and min
-    % mpc_obj.MV(4).Max = 400; % This constraint should actually be on the
-    % axial velocity state 1
-    % mpc_obj.MV(4).Min = 0;
     % Control Surface Angles limited to +or- 30 deg = 0.5236
-    mpc_obj.MV(1).Max = 0.5236;
-    mpc_obj.MV(1).Min = -0.5236;
-    mpc_obj.MV(2).Max = 0.5236;
-    mpc_obj.MV(2).Min = -0.5236;
-    mpc_obj.MV(4).Max = Inf;
-    mpc_obj.MV(4).Min = 0;
-    mpc_obj.MV(3).Max = 0.5236;
-    mpc_obj.MV(3).Min = -0.5236;
-    mpc_obj.MV(5).Max = 0.5236;
-    mpc_obj.MV(5).Min = -0.5236;
-    mpc_obj.MV(6).Max = 0.5236;
-    mpc_obj.MV(6).Min = -0.5236;
-    mpc_obj.MV(7).Max = 0.5236;
-    mpc_obj.MV(7).Min = -0.5236;
+    for k = 1:7
+        if k == 4
+            mpc_obj.MV(k).Max = Inf;
+            mpc_obj.MV(k).Min = 0;
+            mpc_obj.MV(k).ScaleFactor = 5;
+        else
+            mpc_obj.MV(k).Max = 0.5236;
+            mpc_obj.MV(k).Min = -0.5236;
+            % Set Span to Better Scaling of Hessian
+            mpc_obj.MV(k).ScaleFactor = .5;
+        end
+    end
+
     % Output Minimums i.e. We cannot fly into the ground, We cannot fly
     % faster than 400 mph, pitch, roll, and yaw are limited as well
     mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
     mpc_obj.OV(1).Min = 0;
+    mpc_obj.OV(1).ScaleFactor = 200;
+    mpc_obj.OV(2).Max = 10; % maximum velocity, 400 mph = 175 m/s
+    mpc_obj.OV(2).Min = -10;
+    mpc_obj.OV(2).ScaleFactor = 20;
+    mpc_obj.OV(3).ScaleFactor = 100;
+    mpc_obj.OV(4).ScaleFactor = 5000;
+    mpc_obj.OV(5).ScaleFactor = 5000;
     mpc_obj.OV(6).Max = 0; % meter, maximum operational range
     mpc_obj.OV(6).Min = -9000;
-    mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
-    mpc_obj.OV(10).Min = -3*pi/2;
-    mpc_obj.OV(11).Max = pi/2; % Pitch rad, the plane cannot flip over the minor axis
-    mpc_obj.OV(11).Min = -pi/2;
-    % Set Weights for Q and R
-    mpc_obj.Weights.MV = [.8 .8 .8 .8 .8 .8 .8];
-    mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-    mpc_obj.Weights.OV = [0 0 0 .6 .6 .1 0 0 0 .5 .5 .5];
-    mpc_obj.Weights.ECR = 100000;
+    mpc_obj.OV(6).ScaleFactor = 3000;
+    mpc_obj.OV(7).ScaleFactor = 1;
+    mpc_obj.OV(8).ScaleFactor = 1;
+    mpc_obj.OV(9).ScaleFactor = 10;
+    mpc_obj.OV(10).ScaleFactor = 100;
+    mpc_obj.OV(11).ScaleFactor = 20;
+    mpc_obj.OV(12).ScaleFactor = 200;
+%     mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
+%     mpc_obj.OV(10).Min = -3*pi/2;
+%     mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
+%     mpc_obj.OV(11).Min = -pi/2;
+%     mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
+%     mpc_obj.OV(12).Min = -0.5236;
+
+    
 %     mpc_refsignal = zeros(11, 7);
-    if i = 1;
-        xmpc = mpcstate(mpc_obj);
-    end
+%     if i == 1
+%         xmpc = mpcstate(mpc_obj);
+%         xmpc.Plant = state(end,:);        
+%     end    
+
+%   Hurricane Initial Conditions and Parameters
+    hurr_para.linvel = 4.9; %m/s
+    hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
+    hurr_para.Vmax = 252; %km/hr The units on this are important!
+    hurr_para.Rmax = 47; % km The units on this are important!
+
+    % Set up ODE 45 outside the iterative loop,
+    hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
+%     n = 100;
+%     tf = 10; % This should equal the control horizon
+%     tarray = linspace(0,tf,n);
+    smallnumber=1e-10;
+    opts=odeset('Abstol',smallnumber,'RelTol',smallnumber);
+
+    z_hurr = [ -5000, 5000, deg2rad(45)]; % Initial hurricane conditions
+%   North position of center of mass WRT Earth, xe, m
+%	East position of center of mass WRT Earth, ye, m
+%   Angle of Hurricane Path with respect to the Earth Frame's East Axis
+     
+%     mpc_options = mpcmoveopt();
+%     mpc_options.MVMax = [0.5236 0.5236 0.5236 Inf 0.5236 0.5236 0.5236];
+%     mpc_options.MVMin = [-0.5236 -0.5236 -0.5236 0 -0.5236 -0.5236 -0.5236];
+%     mpc_options.OutputMax = [175 10 Inf Inf Inf 0 Inf Inf Inf 3*pi/2 pi/2 Inf];
+%     mpc_options.OutputMin = [0 -10 -Inf -Inf -Inf -9000 -Inf -Inf -Inf -3*pi/2 -pi/2 -Inf];
     
-    % LQR for comparison
-%     Q_lqr = [0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 .6 0 0 0 0 0 0 0 0;
-%           0 0 0 0 .6 0 0 0 0 0 0 0;
-%           0 0 0 0 0 .1 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 0 0 0;
-%           0 0 0 0 0 0 0 0 0 .1 0 0;
-%           0 0 0 0 0 0 0 0 0 0 .1 0;
-%           0 0 0 0 0 0 0 0 0 0 0 .1];
-%     R_lqr = .1*eye(7);
-%     K1 = lqr(CSTR,Q_lqr,R_lqr);
+%    Switch betweemn sim and mpcmove
+    options = mpcsimopt();
+    options.RefLookAhead = 'on';
+    options.MDLookAhead = 'off';
+    options.Constraints = 'on';
+    options.OpenLoop = 'off';
     
+
+%for i = 1:round(Tstop/Ts)+1
+for i = 1:round(Tstop/c) % Number of Iterations if using Sim
+    % Calculate current output before applying wind disturbances
+%     y_mpcmove = C*x+D*u;
+    
+    % Calculate the Current Wind Disturbances
+	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
+
+    mod1 = windb(1)*tf([1],[1 0]);
+    mod2 = windb(2)*tf([1],[1 0]);
+    mod3 = windb(3)*tf([1],[1 0]);
+    mod_comb = eye(3)*[mod1;mod2;mod3];
+    setindist(mpc_obj,'model',mod_comb);
+
+%     % Add the Unmeasured Disturbance Going into Plant
+% 	x	=	x - [windb(1);...
+%                  windb(2);...
+% 			     windb(3);...
+%                  zeros(9,1)];
+             
+    mpc_obj.Model.Nominal.Y = state(end,:); % Use last state, no disturbances included
+    mpc_obj.Model.Nominal.U = [control(end,:) 0 0 0]; % Use last control
 
 %   Huricane Modeling
     % Run an ODE 45 Solver to calculate the hurricane trjectory over the
     % current control horizon
     z = ode45(hurr_prop,tarray,z_hurr,opts);
     zarray = deval(z,tarray);
-    index = find(tarray==c); % Find what iteration has the control horizon
+    index = find(tarray==(c*Ts)); % Find what iteration has the control horizon
     z_hurr = zarray(:,index)'; % Current Hurricane State At End of Control Period
     z_total = [z_total;zarray(:,1:index)']; % Store up through the control horizon
     % Reference Signal Out to the Prediction Horizon MPC controller
     % calculation
-    ref_signal = [zeros(3,length(zarray(1,:)));...
-                  zarray(2,:);... % Hurricane Center Position, North
-                  zarray(1,:);... % Hurricane Center Position, East
-                  -3000*ones(1,length(zarray(1,:)));... % Desired Flight Height
-                  zeros(6,length(zarray(1,:)))]';
+    ref_signal = [zeros(3,length(zarray(1,2:end)));...
+                  zarray(2,2:end);... % Hurricane Center Position, North
+                  zarray(1,2:end);... % Hurricane Center Position, East
+                  -3000*ones(1,length(zarray(1,2:end)));... % Desired Flight Height
+                  zeros(6,length(zarray(1,2:end)))]';
 
     % Attempt with Simulation Function
-%     sim(mpc_obj, 1, ref_signal, [], options)
-%     [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, 1, ref_signal, [], options);
-%     x = y'
-%     state = [state;y];
-%     u = u_t'
-%     control = [control;u_t];
+    % sim(mpc_obj, 1, ref_signal, [], options)
+    [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, p+1, ref_signal, [], options);
+    index = find(t==(c*Ts));
+    u = u_t(index,:)';
+    x = y(index,:)'
+%     x = Fmodel*x+Gmodel*u;
+    state = [state;y(2:index,:)];
+    control = [control;u_t(2:index,:)];
+    
     % Attempt with MPC Move with Explicit Defintion of Time
-    [u,Info] = mpcmove(mpc_obj, xmpc, y, ref_signal, [], mpc_options);
-    index = find(Info.Topt==c);
-    x = Info.Xopt(index,1:12)';
-    state = [state;Info.Xopt(1:index,1:12)];
-    control = [control;u'];
+%     [u,Info] = mpcmove(mpc_obj, xmpc, y_mpcmove, ref_signal, [], mpc_options);
+%     index = find(Info.Topt==c);
+%     x = xmpc.Plant; % Info.Xopt(index,1:12)';
+%     state = [state;Info.Xopt(1:index,1:12)];
+%     control = [control;u'];
 end
     
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
@@ -392,40 +398,41 @@ end
     ylabel('North [m]')
     zlabel('Altitude [m]')
     
+    t_state = linspace(0,Tstop,length(state(:,1)))';
     figure()
-    plot(t,(y(:,10)),'Linewidth',2)
+    plot(t_state,(state(:,10)),'Linewidth',2)
     hold on
-    plot(t,(y(:,11)),'Linewidth',2)
-    plot(t,(y(:,12)),'Linewidth',2)
+    plot(t_state,(state(:,11)),'Linewidth',2)
+    plot(t_state,(state(:,12)),'Linewidth',2)
     title('Aircraft Roll Pitch Yaw')
     legend('Roll','Pitch','Yaw')
     xlabel('Time [sec]')
     ylabel('Angle [deg]')
     
-    
+    t_control = linspace(0,Tstop,length(control(:,1)))';
     figure()
     subplot(2,1,1)
-    stairs(t,rad2deg(control(:,1)))
+    stairs(t_control,rad2deg(control(:,1)))
     hold on
-    stairs(t,rad2deg(control(:,2)))
-    stairs(t,rad2deg(control(:,3)))
-    stairs(t,rad2deg(control(:,5)))
-    stairs(t,rad2deg(control(:,6)))
-    stairs(t,rad2deg(control(:,7)))
+    stairs(t_control,rad2deg(control(:,2)))
+    stairs(t_control,rad2deg(control(:,3)))
+    stairs(t_control,rad2deg(control(:,5)))
+    stairs(t_control,rad2deg(control(:,6)))
+    stairs(t_control,rad2deg(control(:,7)))
     title('Control Surface Angles')
     xlabel('Time [sec]')
     ylabel('Angle [deg]')
     legend('Elevator','Aileron','Rudder','Asymmetric Spoiler','Flap','Stabilator')
     
     subplot(2,1,2)
-    stairs(t,control(:,4))
+    stairs(t_control,control(:,4))
     title('Throttle')
     xlabel('Time [sec]')
     ylabel('Throttle [T]')
     
 	%Flight Path History
 	if SIMUL >= 1
-		tspan	=	[ti tf];
+		tspan	=	[ti tfinal];
 		xo		=	x + delx
 		u		=	u + delu;
 		[t,x]	=	ode23('EoM',tspan,xo);

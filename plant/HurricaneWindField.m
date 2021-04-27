@@ -38,20 +38,22 @@ else
     Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
 end
 
-% Create Noise of +-10m/s for each portion of velocity
-noise = -10 + (10+10)*rand(3,1);
+% Create Noise of +-5m/s for each portion of velocity
+noise = -Vr/2 + (Vr/2+Vr/2)*rand(1,1);
 
 % Use Trigonometry to Split Vr into x and y components
-dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
-dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
+% dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
+% dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
+Vt = cross([(Vr*.277778+noise)*(x(5)-z(1))/abs((x(5)-z(1))),(Vr*.277778+noise)*(x(4)-z(2))/abs((x(4)-z(2))),0],[0,0,1]);
 
 % Cross with <0,0,1> to get the tangential component
-Vt = cross([dx,dy,0],[0,0,1]);
+% Vt = cross([dx,dy,0],[0,0,1]);
 
 % Calculate the magnitude of the vertical velocity
 % This seems to be a function of distance from the eye wall and height in
 % the hurricane - Initially set to be 15 m/s universally
-dz = 15+noise(3); %m/s
+noise = -5 + (5+5)*rand(1,1);
+dz = -15+noise; %m/s
 
 % [X,Y] = meshgrid(-240:20:240);
 % for i = 1:length(X(1,:))
@@ -62,16 +64,18 @@ dz = 15+noise(3); %m/s
 %         else
 %             Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
 %         end
-%         dx(j,i) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
-%         dy(j,i) = Vr*(-X(1,i));       %/(X.^2+Y.^2));
+%         vect = Vr*[(X(1,i)-z(1)),(Y(j,1)-z(2)),0];
+%         dxdy = cross(vect,[0,0,1]);
+%         dx(j,i) = dxdy(1);        %/(X.^2+Y.^2));
+%         dy(j,i) = dxdy(2);       %/(X.^2+Y.^2));
 %     end
 % end
 % 
 % %
 % 
 % figure
-% % contour(X,Y,dx,dy)
-% % hold on
+% contour(X,Y,dx,dy)
+% hold on
 % quiver(X,Y,dx,dy,'AutoScaleFactor',1)
 % hold off
 % axis equal

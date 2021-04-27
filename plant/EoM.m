@@ -1,7 +1,7 @@
-	function xdot = EoM(t,x)
+	function xdot = EoM(t,x,u)
 %	Equations of Motion
 
-	global m Ixx Iyy Izz Ixz S b c GEAR CONTROL u
+	global m Ixx Iyy Izz Ixz S b c GEAR CONTROL u %windb
 
 %	Earth-to-Body-Axis Transformation Matrix
 	HEB		=	DCM(x(10),x(11),x(12));
@@ -9,11 +9,12 @@
 	[airDens,airPres,temp,soundSpeed]	=	Atmos(-x(6));
 %	Body-Axis Wind Field
 	windb	=	WindField(-x(6),x(10),x(11),x(12));
+    wind_dist = windb;
 %	Body-Axis Gravity Components
 	gb		=	HEB * [0;0;9.80665];
 
 %	Air-Relative Velocity Vector
-	Va		=	[x(1);x(2);x(3)] + windb;
+	Va		=	[x(1);x(2);x(3)] + wind_dist;
 	V		=	sqrt(Va' * Va);
 	alphar	=	atan(Va(3) / Va(1));
 	alpha 	=	57.29578 * alphar;
