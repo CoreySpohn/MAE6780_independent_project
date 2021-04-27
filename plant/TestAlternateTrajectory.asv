@@ -1,0 +1,15 @@
+%   Hurricane Initial Conditions and Parameters
+    hurr_para.linvel = 4.9; %m/s
+    hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
+    hurr_para.Vmax = 252; %km/hr The units on this are important!
+    hurr_para.Rmax = 47; % km The units on this are important!
+
+    % Set up ODE 45 outside the iterative loop,
+    hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
+%     n = 100;
+%     tf = 10; % This should equal the control horizon
+%     tarray = linspace(0,tf,n);
+    smallnumber=1e-10;
+    opts=odeset('Abstol',smallnumber,'RelTol',smallnumber);
+
+    z_hurr = [ -5000, 5000, deg2rad(45)]; % Initial hurricane conditions
