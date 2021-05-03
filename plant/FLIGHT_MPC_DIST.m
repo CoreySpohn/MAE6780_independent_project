@@ -225,9 +225,9 @@
         mpc_obj.ControlHorizon = c;
         mpc_obj.Model.StateFcn = @(x,u) EOM(t,x,u);
         % Set Weights for Q and R
-        mpc_obj.Weights.ManipulatedVariables = [.9 .9 .9 .7 .9 .9 .9];
+        mpc_obj.Weights.ManipulatedVariables = [.7 .7 .7 .9 .7 .7 .7];
     %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .9 .5 .5 0.001 0.001 0.001 .2 .3 .2];
+        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .95 .95 .8 0.001 0.001 0.001 .1 .1 .1];
     %     mpc_obj.Weights.ECR = 100000;
     end
   
