@@ -15,7 +15,7 @@ close all
 	dS = 		-1.948;	% Stabilator setting, deg
 	dT = 		0.2;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
-	h =			9150;	% Altitude above Sea Level, m
+	h =			12000;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
 	LINEAR = 	0;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
@@ -29,8 +29,8 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		0;		% Initial longitudinal position, m
+	V =			200;	% True Air Speed, TAS, m/s	(relative to air mass)
+	xe =		-500000;		% Initial longitudinal position, m
 	ye = 		0;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
@@ -81,7 +81,7 @@ close all
 						
 %	Initial-Condition Perturbation (Test Inputs)
 	delx	=	[0;0;0
-				1000;2000;20
+				1000;1000;0
 				0.00;0.00;0.00
 				0.00;0.00;0];
 				
@@ -89,16 +89,18 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 150;
+    tf = 6000;
 
-%   Linearized dynamics
+%   Linearized dynamics (no hurricane)
     global A B
+    global hurricane
+    hurricane = 0;
     thresh = 0.1 * ones(19, 1);
     xj = [xn0; un];
 	xdotj = LinModel(t0,xj);
 	[dFdX,~] = numjac('LinModel', t0, xj, xdotj, thresh, [], 0);
     A = dFdX(1:12,1:12);
-	B = dFdX(1:12,[13:19]);
+	B = dFdX(1:12,[13:16 18:19]);
     
 %   True initial state
     x0 = xn0 + delx;
@@ -106,9 +108,22 @@ close all
 %   Simulation steps
     N = 1000;
     T = linspace(t0, tf, N);
+    
+%   Simulate hurricane
+    global hurr_para hurr_Z hurr_T
+    hurr_para.linvel = 0; %m/s
+    hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
+    hurr_para.Vmax = 252; %km/hr The units on this are important!
+    hurr_para.Rmax = 47; % km The units on this are important!
+    z_hurr = [ 0, 0, deg2rad(45)]; % Initial hurricane conditions
+%   North position of center of mass WRT Earth, xe, m
+%	East position of center of mass WRT Earth, ye, m
+%   Angle of Hurricane Path with respect to the Earth Frame's East Axis
+    [hurr_T, hurr_Z] = ode45(@HurricaneEOM, T, z_hurr);
 
-%   Integrate true motion
-    [T, X] = ode23s(@SMEoM, T, x0);
+%   Integrate true motion (yes hurricane)
+    hurricane = 1;
+    [T, Xt] = ode23s(@SMEoM, T, x0);
     
 %   Nominal states
     Xn = zeros(N, 12);
@@ -121,8 +136,8 @@ close all
     
 %   Plot planar motion
     subplot(2, 2, 1)
-    plot(Xn(:,4), Xn(:,5), 'b-', X(:,4), X(:,5), 'r:', ...
-        Xn(1,4), Xn(1,5), 'b*', X(1,4), X(1,5), 'r*')
+    plot(Xn(:,4), Xn(:,5), 'b-', Xt(:,4), Xt(:,5), 'r:', ...
+        Xn(1,4), Xn(1,5), 'b*', Xt(1,4), Xt(1,5), 'r*')
     legend('Desired','True','Location','best') 
     xlabel('x (m)')
     ylabel('y (m)')
@@ -130,21 +145,21 @@ close all
     
 %   Plot altitude
     subplot(2, 2, 2)
-    plot(T, -Xn(:,6), 'b-', T, -X(:,6), 'r:')
+    plot(T, -Xn(:,6), 'b-', T, -Xt(:,6), 'r:')
     legend('Desired','True','Location','best')
     xlabel('Time (s)')
     ylabel('Altitude (m)')
     
 %   Plot velocity
     subplot(2, 2, 3)
-    plot(T, Xn(:,1), 'b-', T, X(:,1), 'r:')
+    plot(T, Xn(:,1), 'b-', T, Xt(:,1), 'r:')
     legend('Desired','True','Location','best')
     xlabel('Time (s)')
     ylabel('Axial Velocity (m/s)')
     
 %   Plot roll/pitch/yaw
     subplot(2, 2, 4)
-    plot(T, rad2deg(X(:,10)), T, rad2deg(X(:,11)), T, rad2deg(X(:,12)))
+    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
     legend('Roll','Pitch','Yaw','Location','best')
     xlabel('Time (s)')
     ylabel('Angle (deg)')
@@ -153,6 +168,48 @@ close all
     PrepFigPresentation(gcf)
     saveas(gcf, 'sm_flight.png')
 
+%--------------------------------------------------------------------------
+
+    Vmax = hurr_para.Vmax;
+    Rmax = hurr_para.Rmax*1000; % Convert from km to m
+    
+    [X,Y] = meshgrid(-500:100:500);
+    for i = 1:length(X(1,:))
+        for j = 1:length(Y(:,1))
+            r = (X(1,i)^2+Y(j,1)^2)^.5;
+            if r<Rmax
+               Vr = Vmax*(r/Rmax)^(3/2);%Scalar multiplier of the vector field
+            else
+                Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
+            end
+            dx(j,i) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
+            dy(j,i) = Vr*(-X(1,i));       %/(X.^2+Y.^2));
+        end
+    end
+    
+    figure
+    % contour(X,Y,dx,dy)
+    hold on
+    quiver(X,Y,dx,dy,'AutoScaleFactor',1)
+    plot(Xn(:,4)/1000, Xn(:,5)/1000, 'b-', ...
+         Xt(:,4)/1000, Xt(:,5)/1000, 'r:', 'LineWidth', 1.5)
+    legend('Wind','Desired Trajectory', 'Actual Trajectory')
+    hold off
+    axis equal
+    xlabel('x [km]')
+    ylabel('y [km]')
+
+    %PrepFigPresentation(gcf)
+    saveas(gcf, 'sm_hurricane.png')
+    
+    % Plot RPY
+    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
+    legend('Roll','Pitch','Yaw','Location','best')
+    xlabel('Time (s)')
+    ylabel('Angle (deg)')
+    PrepFigPresentation(gcf)
+    saveas(gcf, 'sm_rpy.png')
+    
 end
 
 function xd = SMEoM(t, x)
@@ -160,7 +217,7 @@ function xd = SMEoM(t, x)
     % Constants
     tau = 5;
     L = 20;
-    ls = 1;
+    ls = 0.0001;
     
     % Nominal state
     xn = NomState(t);
@@ -174,11 +231,33 @@ function xd = SMEoM(t, x)
 
 end
 
-function [xn] = NomState(t)
+function xn = NomState(t)
 
     global xn0
     xn = xn0;
     H = DCM(xn(10), xn(11), xn(12))';
     xn(4:6) = xn(4:6) + t * H * xn(1:3);
 
+%     global hurr_Z hurr_T
+% 
+%     z_hurr = interp1(hurr_T, hurr_Z, t, 'spline');
+%     
+%     xn = [zeros(3,1);...
+%                   z_hurr(2);... % Hurricane Center Position, North
+%                   z_hurr(1);... % Hurricane Center Position, East
+%                   -3000;... % Desired Flight Height
+%                   zeros(6,1)];
+
+%     R = 10000;
+%     V = 240;
+%     z = -9000;
+%     th0 = pi;
+%     w = -V/R;
+%     
+%     th = w * t + th0;
+%     
+%     xn = [V; 0; 0; R*cos(th); R*sin(th); z; 0; 0; w; 0; 0; ...
+%           th+sign(w)*(pi/2)];
+    
+    
 end

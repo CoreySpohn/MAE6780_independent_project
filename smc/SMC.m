@@ -27,9 +27,9 @@ function usm = SMC(t, x, xn, un, tau, L, ls)
     
     % Sliding-mode control
     v = lsqminnorm(S*B, -L*sigmoid(sig));
-    %usm(1:6) = un(1:6) + v;
-    %usm(7) = un(7);
-    usm = un + v;
+    usm(1:4) = un(1:4) + v(1:4);
+    usm(5) = un(5);
+    usm(6:7) = un(6:7) + v(5:6);
     
 end
 
@@ -59,5 +59,5 @@ end
 function s = sigmoid(z)
 
     s = (2/pi) * atan(100*z);
-
+    
 end
