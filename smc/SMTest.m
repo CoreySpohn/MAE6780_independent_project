@@ -15,7 +15,7 @@ close all
 	dS = 		-1.948;	% Stabilator setting, deg
 	dT = 		0.2;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
-	h =			12000;	% Altitude above Sea Level, m
+	h =			5000;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
 	LINEAR = 	0;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
@@ -81,7 +81,7 @@ close all
 						
 %	Initial-Condition Perturbation (Test Inputs)
 	delx	=	[0;0;0
-				1000;1000;0
+				0;0;0
 				0.00;0.00;0.00
 				0.00;0.00;0];
 				
@@ -89,7 +89,7 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 6000;
+    tf = 600;
 
 %   Linearized dynamics (no hurricane)
     global A B
@@ -221,16 +221,16 @@ end
 function xd = SMEoM(t, x)
 
     % Constants
-    tau = 5;
-    L = 20;
-    ls = 0.0001;
+    Kr = 10 * eye(3);
+    Kth = 0.001 * eye(3);
+    L = 0.01;
     
     % Nominal state
     xn = NomState(t);
     
     % Sliding-mode control
     global u un
-    u = SMC(t, x, xn, un, tau, L, ls);
+    u = SMC(t, x, xn, un, Kr, Kth, L);
     
     % State derivative
     xd = EoM(t, x);

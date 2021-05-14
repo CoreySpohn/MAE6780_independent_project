@@ -9,7 +9,9 @@
 	[airDens,airPres,temp,soundSpeed]	=	Atmos(-x(6));
 %	Body-Axis Wind Field
     if hurricane == 1
-        windb = HurricaneWindField2(t, x);
+        global hurr_para hurr_Z hurr_T
+        z = interp1(hurr_T, hurr_Z, t, 'spline');
+        windb = HurricaneWindField(x,z,hurr_para);
     else
         windb = [0; 0; 0];
     end

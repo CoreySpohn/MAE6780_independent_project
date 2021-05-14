@@ -52,7 +52,7 @@ noise_pt = get_noise(x(5),x(4),noise,xmax,ymax,sf);
 if isnan(noise_pt)
     noise_pt = 0;
 end
-noise_pt
+%noise_pt
 
 
 % Use Trigonometry to Split Vr into x and y components
