@@ -23,8 +23,12 @@ function windb = HurricaneWindField(x,z,hurr_para)
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Unpack Hurricane Properties
-Vmax = hurr_para.Vmax;
+Vmax = hurr_para.Vmax; % km/h
 Rmax = hurr_para.Rmax*1000; % Convert from km to m
+xmax = hurr_para.xmax;
+ymax = hurr_para.ymax;
+noise = hurr_para.noise; % Currently generated inside the TestSMC file
+sf = hurr_para.scalefactor;
 
 % Assign Radial Velocity
 % Calculate the euclidean distance between the hurricane center and the
@@ -35,17 +39,33 @@ theta = atan2((x(4)-z(2)),(x(5)-z(1)));
 % Calculate the magnitude of the radial velocity, Vr, at the radial distance
 if r<Rmax
     Vr = Vmax*(r/Rmax)^(3/2); %Scalar multiplier of the vector field
+    % Eye Wall Altitude Scaling Factors
+    scale = [0 .92 1.1 1.15 1.21 1.15 1.05 1 1 1];
 else
     Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
+    % Outer Vortex Altitude Scaling Factors
+    scale = [0 .8 .94 1.01 1.08 1.06 1.05 1 1 1];
 end
+
+% generate noise that is large enough to account for the sampling location
+noise_pt = get_noise(x(5),x(4),noise,xmax,ymax,sf);
+if isnan(noise_pt)
+    noise_pt = 0;
+end
+noise_pt
+
+
 % Use Trigonometry to Split Vr into x and y components
-dx = Vr*0.277778*cos(theta); %Convert from km/h to m/s
-dy = Vr*0.277778*sin(theta); %Convert from km/h to m/s
+% dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
+% dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
+Vt = cross([(Vr+noise_pt)*.277778*(x(5)-z(1))/abs((x(5)-z(1))),((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1]);
+
+% Cross with <0,0,1> to get the tangential component
+% Vt = cross([dx,dy,0],[0,0,1]);
 
 % Calculate the magnitude of the vertical velocity
-% This seems to be a function of distance from the eye wall and height in
-% the hurricane - Initially set to be 15 m/s universally
-dz = 15; %m/s
+% Most hurricanes need very little wind shear to form so
+dz = 0;
 
 % [X,Y] = meshgrid(-240:20:240);
 % for i = 1:length(X(1,:))
@@ -56,16 +76,18 @@ dz = 15; %m/s
 %         else
 %             Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
 %         end
-%         dx(j,i) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
-%         dy(j,i) = Vr*(-X(1,i));       %/(X.^2+Y.^2));
+%         vect = Vr*[(X(1,i)-z(1)),(Y(j,1)-z(2)),0];
+%         dxdy = cross(vect,[0,0,1]);
+%         dx(j,i) = dxdy(1);        %/(X.^2+Y.^2));
+%         dy(j,i) = dxdy(2);       %/(X.^2+Y.^2));
 %     end
 % end
 % 
 % %
 % 
 % figure
-% % contour(X,Y,dx,dy)
-% % hold on
+% contour(X,Y,dx,dy)
+% hold on
 % quiver(X,Y,dx,dy,'AutoScaleFactor',1)
 % hold off
 % axis equal
@@ -74,11 +96,11 @@ dz = 15; %m/s
 % ylabel('North [km]')
 
 % Assume the wind is uniform in height
-windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
-	windx	=	[dy dy dy dy dy dy dy dy dy dy];	% Northerly wind, m/s
-	windy	=	[dx dx dx dx dx dx dx dx dx dx];	% Easterly wind, m/s
+    windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
+	windx	=	scale.*[Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2)];	% Northerly wind, m/s
+	windy	=	scale.*[Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1)];	% Easterly wind, m/s
 	windz	=	[dz dz dz dz dz dz dz dz dz dz];	% Vertical wind. m/s
-	height  =   -x(6);
+    height = abs(x(6));
 	winde	=	[interp1(windh,windx,height)
 				interp1(windh,windy,height)
 				interp1(windh,windz,height)];	% Earth-relative frame
