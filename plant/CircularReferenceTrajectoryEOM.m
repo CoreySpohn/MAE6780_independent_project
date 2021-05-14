@@ -60,7 +60,7 @@ end
 % position of the aircraft with respect to the hurricane center
 r = Rmax;
 %s_dot = norm(z_ref_vel(1:2));
-s_dot = hurr_para.maxVelAircraft;
+s_dot = hurr_para.maxVelAircraft/2;
 % Angle Between Hurricane Center and Aircraft Position
 theta = atan2((z_ref_pos(1)-z(2)),(z_ref_pos(2)-z(1)));
 theta_dot = s_dot/Rmax;

@@ -178,10 +178,10 @@
     end
     
 %   Start of the Iterative Loop
-    Tstop = 300; % Total Simulation Time
+    Tstop = 1000; % Total Simulation Time
     Ts = 1; % Sample Time
     p = 40; % Predictive Horizon
-    c = 2; % Control Horizon
+    c = 10; % Control Horizon
     tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
     state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
     control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
@@ -217,7 +217,7 @@
         % Set Weights for Q and R
         mpc_obj.Weights.MV = [.7 .7 .7 .9 .7 .7 .7];
     %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-        mpc_obj.Weights.OV = [0.001 0.001 0.001 .95 .95 .95 0.001 0.001 0.001 .1 .1 .1];
+        mpc_obj.Weights.OV = [0.9 0.001 0.001 .95 .95 .95 0.001 0.001 0.001 .1 .1 .1];
     %     mpc_obj.Weights.ECR = 100000;
     else
         mpc_obj = nlmpc(12,12,7);%,'MV',[1 2 3 4 5 6 7],'UD',[1 2 3]);
@@ -228,7 +228,7 @@
         % Set Weights for Q and R
         mpc_obj.Weights.ManipulatedVariables = [.7 .7 .7 .9 .7 .7 .7];
     %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .95 .95 .9 0.001 0.001 0.001 .1 .1 .1];
+        mpc_obj.Weights.OutputVariables = [0.99 0.001 0.001 .95 .95 .9 0.001 0.001 0.001 .1 .1 .1];
     %     mpc_obj.Weights.ECR = 100000;
     end
   
@@ -238,17 +238,13 @@
         if k == 4
             mpc_obj.MV(k).Max = Inf;
             mpc_obj.MV(k).Min = 0;
-            %mpc_obj.MV(k).ScaleFactor = 10;   
+            mpc_obj.MV(k).ScaleFactor = 10;   
         else
             mpc_obj.MV(k).Max = 0.5236;
             mpc_obj.MV(k).Min = -0.5236;
             % Set Span to Better Scaling of Hessian
-            %mpc_obj.MV(k).ScaleFactor = .5;
-            if k == 1
-                mpc_obj.MV(k).ScaleFactor = .01;
-            elseif k==7
-                mpc_obj.MV(k).ScaleFactor = .01;
-            end
+            mpc_obj.MV(k).ScaleFactor = .1;
+
         end
     end
 
@@ -257,23 +253,23 @@
     mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
     hurr_para.maxVelAircraft = 175;
     mpc_obj.OV(1).Min = 0;
-    mpc_obj.OV(1).ScaleFactor = 10;
+    mpc_obj.OV(1).ScaleFactor = 100;
     mpc_obj.OV(2).Max = 10; % maximum velocity, 400 mph = 175 m/s
     mpc_obj.OV(2).Min = -10;
-    mpc_obj.OV(2).ScaleFactor = 30;
-%    mpc_obj.OV(3).ScaleFactor = 100;
-    mpc_obj.OV(4).ScaleFactor = .1;
-    mpc_obj.OV(5).ScaleFactor = 5000;
+    mpc_obj.OV(2).ScaleFactor = 10;
+    mpc_obj.OV(3).ScaleFactor = 10;
+    mpc_obj.OV(4).ScaleFactor = 5;
+    mpc_obj.OV(5).ScaleFactor = 100;
     mpc_obj.OV(6).Max = 0; % meter, maximum operational range
-    mpc_obj.OV(6).Min = -5000;
-    hurr_para.goalaltitude = -500;
-    mpc_obj.OV(6).ScaleFactor = 1;
+    mpc_obj.OV(6).Min = -10000;
+    hurr_para.goalaltitude = -5000;
+    mpc_obj.OV(6).ScaleFactor = 100;
 %     mpc_obj.OV(7).ScaleFactor = 1;
-    mpc_obj.OV(8).ScaleFactor = .1;
-%     mpc_obj.OV(9).ScaleFactor = 10;
-    mpc_obj.OV(10).ScaleFactor = 25;
-    mpc_obj.OV(11).ScaleFactor = 1;
-    mpc_obj.OV(12).ScaleFactor = 20;
+%     mpc_obj.OV(8).ScaleFactor = .1;
+%     mpc_obj.OV(9).ScaleFactor = 1;
+    mpc_obj.OV(10).ScaleFactor = 10;
+%     mpc_obj.OV(11).ScaleFactor = 1;
+    mpc_obj.OV(12).ScaleFactor = 10;
     mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
     mpc_obj.OV(10).Min = -3*pi/2;
     mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
@@ -373,9 +369,10 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
         z_hurr = zarray(1:3,index)';
         z_total = [z_total;zarray(1:3,2:index)']; % Store up through the control horizon
         ref_total = [ref_total;zarray(4:6,2:index)'];
-        ref_signal = [zeros(3,length(zarray(1,2:end)));...
-                      zarray(5,2:end);... % Hurricane Center Position, North
-                      zarray(4,2:end);... % Hurricane Center Position, East
+        ref_signal = [240*ones(1,length(zarray(1,2:end)));...
+                      zeros(2,length(zarray(1,2:end)));...
+                      zarray(4,2:end);... % Hurricane Center Position, North
+                      zarray(5,2:end);... % Hurricane Center Position, East
                       zarray(6,2:end);... % Desired Flight Height
                       zeros(6,length(zarray(1,2:end)))]';
     else
@@ -388,9 +385,10 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
         z_hurr = zarray(1:3,index)';
         z_total = [z_total;zarray(1:3,2:index)']; % Store up through the control horizon
         ref_total = [ref_total;zarray(4:6,2:index)'];
-        ref_signal = [zeros(3,length(zarray(1,2:end)));...
-                      zarray(5,2:end);... % Hurricane Center Position, North
-                      zarray(4,2:end);... % Hurricane Center Position, East
+        ref_signal = [240*ones(1,length(zarray(1,2:end)));...
+                      zeros(2,length(zarray(1,2:end)));...
+                      zarray(4,2:end);... % Hurricane Center Position, North
+                      zarray(5,2:end);... % Hurricane Center Position, East
                       zarray(6,2:end);... % Desired Flight Height
                       zeros(6,length(zarray(1,2:end)))]';
         
