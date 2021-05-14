@@ -12,8 +12,8 @@ close all
 	dE =		0;	% Elevator angle, deg
 	dR =		0;		% Rudder angle, deg
 	dF = 		0;		% Flap setting, deg
-	dS = 		-1.948;	% Stabilator setting, deg
-	dT = 		0.2;	% Throttle setting, % / 100
+	dS = 		-1; %-1;%-1.948;	% Stabilator setting, deg
+	dT = 		0.5;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
 	h =			5000;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
@@ -89,7 +89,7 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 600;
+    tf = 6000;
 
 %   Linearized dynamics (no hurricane)
     global A B
@@ -125,11 +125,13 @@ close all
 %   North position of center of mass WRT Earth, xe, m
 %	East position of center of mass WRT Earth, ye, m
 %   Angle of Hurricane Path with respect to the Earth Frame's East Axis
+    global counter
+    counter = 0;
     [hurr_T, hurr_Z] = ode45(@HurricaneEOM, T, z_hurr);
 
 %   Integrate true motion (yes hurricane)
     hurricane = 1;
-    [T, Xt] = ode23s(@SMEoM, T, x0);
+    [T, Xt] = ode23t(@SMEoM, T, x0);
     
 %   Nominal states
     Xn = zeros(N, 12);
@@ -209,6 +211,7 @@ close all
     saveas(gcf, 'sm_hurricane.png')
     
     % Plot RPY
+    figure
     plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
     legend('Roll','Pitch','Yaw','Location','best')
     xlabel('Time (s)')
@@ -221,9 +224,9 @@ end
 function xd = SMEoM(t, x)
 
     % Constants
-    Kr = 10 * eye(3);
-    Kth = 0.001 * eye(3);
-    L = 0.01;
+    Kr = diag([100, 100, 100]);
+    Kth = diag([1, 1, 0.001]);
+    L = [0.001 * ones(3,1); 1 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
