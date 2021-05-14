@@ -56,10 +56,16 @@ noise_pt
 
 
 % Use Trigonometry to Split Vr into x and y components
-% dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
-% dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
-Vt = cross([(Vr+noise_pt)*.277778*(x(5)-z(1))/abs((x(5)-z(1))),((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1]);
-
+if x(5) == z(1) && x(4) == z(2)
+    Vt = cross([0,0,0],[0,0,1]);
+elseif x(5) == z(1)
+    Vt = cross([0,((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1]);
+elseif x(4) == z(2)
+    Vt = cross([(Vr+noise_pt)*.277778*(x(5)-z(1))/abs((x(5)-z(1))),0,0],[0,0,1]);
+else  
+    Vt = cross([(Vr+noise_pt)*.277778*(x(5)-z(1))/abs((x(5)-z(1))),((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1]);
+end
+    
 % Cross with <0,0,1> to get the tangential component
 % Vt = cross([dx,dy,0],[0,0,1]);
 
