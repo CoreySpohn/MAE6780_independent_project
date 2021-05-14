@@ -115,6 +115,12 @@ close all
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
     hurr_para.Vmax = 252; %km/hr The units on this are important!
     hurr_para.Rmax = 47; % km The units on this are important!
+    hurr_para.xmax = 20000;
+    hurr_para.ymax = 20000;
+    hurr_para.scalefactor = 100;
+%   Generate Noise
+    noise=make_noise(100,100);
+    hurr_para.noise = noise;
     z_hurr = [ 0, 0, deg2rad(45)]; % Initial hurricane conditions
 %   North position of center of mass WRT Earth, xe, m
 %	East position of center of mass WRT Earth, ye, m
