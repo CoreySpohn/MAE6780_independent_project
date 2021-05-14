@@ -22,8 +22,11 @@ function windb = HurricaneWindField(x,z,hurr_para)
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Unpack Hurricane Properties
-Vmax = hurr_para.Vmax;
+Vmax = hurr_para.Vmax; % km/h
 Rmax = hurr_para.Rmax*1000; % Convert from km to m
+xmax = hurr_para.xmax;
+ymax = hurr_para.ymax;
+sf = hurr_para.scalefactor;
 
 % Assign Radial Velocity
 % Calculate the euclidean distance between the hurricane center and the
@@ -34,26 +37,44 @@ theta = atan2((x(4)-z(2)),(x(5)-z(1)));
 % Calculate the magnitude of the radial velocity, Vr, at the radial distance
 if r<Rmax
     Vr = Vmax*(r/Rmax)^(3/2); %Scalar multiplier of the vector field
+    % Eye Wall Altitude Scaling Factors
+    scale = [0 .92 1.1 1.15 1.21 1.15 1.05 1 1 1];
 else
     Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
+    % Outer Vortex Altitude Scaling Factors
+    scale = [0 .8 .94 1.01 1.08 1.06 1.05 1 1 1];
 end
 
-% Create Noise of +-5m/s for each portion of velocity
-noise = -Vr/2 + (Vr/2+Vr/2)*rand(1,1);
+% generate noise that is large enough to account for the sampling location
+noise=make_noise(100,100);
+noise_pt = get_noise(x(5),x(4),noise,xmax,ymax,sf);
+if isnan(noise_pt)
+    noise_pt = 0;
+end
+noise_pt
+
+
+if x(5) == z(1) && x() == z(1)
+    
+elseif x(5) == z(1)
+    cross([0,((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1])
+elseif
+else
+end
+    
+
 
 % Use Trigonometry to Split Vr into x and y components
 % dx = Vr*0.277778*cos(theta)+noise(1); %Convert from km/h to m/s
 % dy = Vr*0.277778*sin(theta)+noise(2); %Convert from km/h to m/s
-Vt = cross([(Vr*.27778+noise(1))*(x(5)-z(1))/abs((x(5)-z(1))),(Vr*.27778+noise(1))*(x(4)-z(2))/abs((x(4)-z(2))),0],[0,0,1]);
+Vt = cross([(Vr+noise_pt)*.277778*(x(5)-z(1))/abs((x(5)-z(1))),((Vr+noise_pt)*.277778*(x(4)-z(2)))/abs((x(4)-z(2))),0],[0,0,1]);
 
 % Cross with <0,0,1> to get the tangential component
 % Vt = cross([dx,dy,0],[0,0,1]);
 
 % Calculate the magnitude of the vertical velocity
-% This seems to be a function of distance from the eye wall and height in
-% the hurricane - Initially set to be 15 m/s universally
-noise = -5 + (5+5)*rand(1,1);
-dz = 15+noise; %m/s
+% Most hurricanes need very little wind shear to form so
+dz = 0;
 
 % [X,Y] = meshgrid(-240:20:240);
 % for i = 1:length(X(1,:))
@@ -85,8 +106,8 @@ dz = 15+noise; %m/s
 
 % Assume the wind is uniform in height
     windh	=	[-10 0 100 200 500 1000 2000 4000 8000 16000];	% Wind-Height, m
-	windx	=	[Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2)];	% Northerly wind, m/s
-	windy	=	[Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1)];	% Easterly wind, m/s
+	windx	=	scale.*[Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2) Vt(2)];	% Northerly wind, m/s
+	windy	=	scale.*[Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1) Vt(1)];	% Easterly wind, m/s
 	windz	=	[dz dz dz dz dz dz dz dz dz dz];	% Vertical wind. m/s
     height = abs(x(6));
 	winde	=	[interp1(windh,windx,height)
@@ -94,3 +115,43 @@ dz = 15+noise; %m/s
 				interp1(windh,windz,height)];	% Earth-relative frame
 	HEB		=	DCM(x(10),x(11),x(12));
 	windb	=	HEB * winde;					% Body-axis frame
+end
+    
+    function val = get_noise(x,y,noise,max_x,max_y,scale_factor)
+
+    %Input desired x and y values.
+    %Input noise map.
+    %Input largest x and y values.
+    %95th percentile is such that the average of the 2.5 and 97.5 percentiles
+    %are between 1 and -1, use scalefactor to change to appropriate scale.
+
+    ptile=prctile(noise,[2.5,97.5],'all');
+    scale_to_1=(abs(ptile(1))+abs(ptile(2)))/2;
+    [n, m] = size(noise);
+    y_s=n/max_y*y;
+    x_s=m/max_x*x;
+    val = interp2(noise,x_s,y_s);
+    val = val*scale_factor/scale_to_1;
+
+end
+
+
+function noise = make_noise(n,m)
+    %Input grid size, perlin noise map will be output.
+    noise = zeros(n, m);
+    noise = perlin_noise(noise);
+end
+
+function im = perlin_noise(im)
+    %Generates smooth noise
+    [n, m] = size(im);
+    i = 0;
+    w = sqrt(n*m);
+
+    while w > 3
+        i = i + 1;
+        d = interp2(randn(n, m), i-1, 'spline');
+        im = im + i * d(1:n, 1:m);
+        w = w - ceil(w/2 - 1);
+    end
+end 

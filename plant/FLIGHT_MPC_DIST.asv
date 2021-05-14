@@ -53,7 +53,7 @@
 	'FLIGHT'
 
 %	Alphabetical List of Initial Conditions
-	alpha =		3.63;	% Angle of attack, deg	(relative to air mass)
+	alpha =		0;	% Angle of attack, deg	(relative to air mass)
 	beta =		0;		% Sideslip angle, deg	(relative to air mass)
 	cm =		0.25;	% Longitudinal center-of-mass location, % mac/100
 	CONTROL = 	0;		% Feedback control ON (= 1) or OFF (= 0)
@@ -65,7 +65,7 @@
 	dS = 		-1.948;	% Stabilator setting, deg
 	dT = 		0.1919;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
-	h =			1000;	% Altitude above Sea Level, m
+	h =			5000;	% Altitude above Sea Level, m
 	hdot =		0;		% Altitude rate, m/s
 	LINEAR = 	1;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
@@ -79,9 +79,9 @@
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		0;		% Trim flag (= 1 to calculate trim)
-	V =			244;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		0;		% Initial longitudinal position, m
-	ye = 		0;		% Initial lateral position, m
+	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
+	xe =		200;		% Initial longitudinal position, m
+	ye = 		5000;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
 %	Initial Conditions depending on prior initial conditions
@@ -179,13 +179,14 @@
     
 %   Start of the Iterative Loop
     Tstop = 300; % Total Simulation Time
-    Ts = 5; % Sample Time
-    p = 30; % Predictive Horizon
-    c = 3; % Control Horizon
+    Ts = 1; % Sample Time
+    p = 40; % Predictive Horizon
+    c = 2; % Control Horizon
     tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
     state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
     control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
     z_total = []; % Set up variable to contain the hurricane track after each loop
+    ref_total = [x(4),x(5),x(6)]; % Start trajectory at aircraft starting position
     % We assume we have perfect knowledge of the states 
     C = eye(12);
     D = zeros(12,7);
@@ -214,9 +215,9 @@
         % Starting control input
         mpc_obj.Model.Nominal.U = [control(end,:) 0 0 0]; % Use last control
         % Set Weights for Q and R
-        mpc_obj.Weights.MV = [.9 .9 .9 .7 .9 .9 .9];
+        mpc_obj.Weights.MV = [.7 .7 .7 .9 .7 .7 .7];
     %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-        mpc_obj.Weights.OV = [0.001 0.001 0.001 .9 .9 .4 0.001 0.001 0.001 .2 .3 .2];
+        mpc_obj.Weights.OV = [0.001 0.001 0.001 .95 .95 .95 0.001 0.001 0.001 .1 .1 .1];
     %     mpc_obj.Weights.ECR = 100000;
     else
         mpc_obj = nlmpc(12,12,7);%,'MV',[1 2 3 4 5 6 7],'UD',[1 2 3]);
@@ -225,9 +226,9 @@
         mpc_obj.ControlHorizon = c;
         mpc_obj.Model.StateFcn = @(x,u) EOM(t,x,u);
         % Set Weights for Q and R
-        mpc_obj.Weights.ManipulatedVariables = [.9 .9 .9 .7 .9 .9 .9];
+        mpc_obj.Weights.ManipulatedVariables = [.7 .7 .7 .9 .7 .7 .7];
     %     mpc_obj.Weights.MVRate = [0.1 0.1 0.1 0.1 0.1 0.1 0.1];
-        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .9 .9 .9 0.001 0.001 0.001 .2 .3 .2];
+        mpc_obj.Weights.OutputVariables = [0.001 0.001 0.001 .95 .95 .9 0.001 0.001 0.001 .1 .1 .1];
     %     mpc_obj.Weights.ECR = 100000;
     end
   
@@ -237,41 +238,48 @@
         if k == 4
             mpc_obj.MV(k).Max = Inf;
             mpc_obj.MV(k).Min = 0;
-            mpc_obj.MV(k).ScaleFactor = 5;
+            %mpc_obj.MV(k).ScaleFactor = 10;   
         else
             mpc_obj.MV(k).Max = 0.5236;
             mpc_obj.MV(k).Min = -0.5236;
             % Set Span to Better Scaling of Hessian
-            mpc_obj.MV(k).ScaleFactor = .5;
+            %mpc_obj.MV(k).ScaleFactor = .5;
+            if k == 1
+                mpc_obj.MV(k).ScaleFactor = .01;
+            elseif k==7
+                mpc_obj.MV(k).ScaleFactor = .01;
+            end
         end
     end
 
     % Output Minimums i.e. We cannot fly into the ground, We cannot fly
     % faster than 400 mph, pitch, roll, and yaw are limited as well
     mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
+    hurr_para.maxVelAircraft = 175;
     mpc_obj.OV(1).Min = 0;
-    mpc_obj.OV(1).ScaleFactor = 200;
+    mpc_obj.OV(1).ScaleFactor = 10;
     mpc_obj.OV(2).Max = 10; % maximum velocity, 400 mph = 175 m/s
     mpc_obj.OV(2).Min = -10;
-    mpc_obj.OV(2).ScaleFactor = 20;
-    mpc_obj.OV(3).ScaleFactor = 100;
-    mpc_obj.OV(4).ScaleFactor = 5000;
+    mpc_obj.OV(2).ScaleFactor = 30;
+%    mpc_obj.OV(3).ScaleFactor = 100;
+    mpc_obj.OV(4).ScaleFactor = .1;
     mpc_obj.OV(5).ScaleFactor = 5000;
     mpc_obj.OV(6).Max = 0; % meter, maximum operational range
-    mpc_obj.OV(6).Min = -9000;
-    mpc_obj.OV(6).ScaleFactor = 3000;
-    mpc_obj.OV(7).ScaleFactor = 1;
-    mpc_obj.OV(8).ScaleFactor = 1;
-    mpc_obj.OV(9).ScaleFactor = 10;
-    mpc_obj.OV(10).ScaleFactor = 100;
-    mpc_obj.OV(11).ScaleFactor = 20;
-    mpc_obj.OV(12).ScaleFactor = 200;
-%     mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
-%     mpc_obj.OV(10).Min = -3*pi/2;
-%     mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
-%     mpc_obj.OV(11).Min = -pi/2;
-%     mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
-%     mpc_obj.OV(12).Min = -0.5236;
+    mpc_obj.OV(6).Min = -5000;
+    hurr_para.goalaltitude = -500;
+    mpc_obj.OV(6).ScaleFactor = 1;
+%     mpc_obj.OV(7).ScaleFactor = 1;
+    mpc_obj.OV(8).ScaleFactor = .1;
+%     mpc_obj.OV(9).ScaleFactor = 10;
+    mpc_obj.OV(10).ScaleFactor = 25;
+    mpc_obj.OV(11).ScaleFactor = 1;
+    mpc_obj.OV(12).ScaleFactor = 20;
+    mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
+    mpc_obj.OV(10).Min = -3*pi/2;
+    mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
+    mpc_obj.OV(11).Min = -pi/2;
+    mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
+    mpc_obj.OV(12).Min = -0.5236;
 
     
 %     mpc_refsignal = zeros(11, 7);
@@ -284,17 +292,25 @@
     hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
     hurr_para.Vmax = 252; %km/hr The units on this are important!
-    hurr_para.Rmax = 47; % km The units on this are important!
+    hurr_para.Rmax = 5;%47; % km The units on this are important!
+    hurr_para.xmax = 20000;
+    hurr_para.ymax = 20000;
+    hurr_para.scalefactor = 100;
+    science_traj = false;
+    
+%   Create a Noise WindField, only sliding mode will do this outside the
+%   loop
 
     % Set up ODE 45 outside the iterative loop,
-    hurr_prop = @(t,z) HurricaneEOM(t,z,hurr_para);
+    hurr_prop = @(t,z) HurricaneEOM2(t,z,hurr_para);
+    hurr_science = @(t,z) CircularReferenceTrajectoryEOM(t,z,hurr_para);
 %     n = 100;
 %     tf = 10; % This should equal the control horizon
 %     tarray = linspace(0,tf,n);
     smallnumber=1e-10;
     opts=odeset('Abstol',smallnumber,'RelTol',smallnumber);
 
-    z_hurr = [ -5000, 5000, deg2rad(45)]; % Initial hurricane conditions
+    z_hurr = [ 5000, 10000, deg2rad(45)]; % Initial hurricane conditions
 %   North position of center of mass WRT Earth, xe, m
 %	East position of center of mass WRT Earth, ye, m
 %   Angle of Hurricane Path with respect to the Earth Frame's East Axis
@@ -319,7 +335,7 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
 %     y_mpcmove = C*x+D*u;
     
     % Calculate the Current Wind Disturbances
-	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
+	windb	=	HurricaneWindField(x,z_hurr,hurr_para)
 
     mod1 = windb(1)*tf([1],[1 0]);
     mod2 = windb(2)*tf([1],[1 0]);
@@ -339,18 +355,46 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
 %   Huricane Modeling
     % Run an ODE 45 Solver to calculate the hurricane trjectory over the
     % current control horizon
-    z = ode45(hurr_prop,tarray,z_hurr,opts);
-    zarray = deval(z,tarray);
-    index = find(tarray==(c*Ts)); % Find what iteration has the control horizon
-    z_hurr = zarray(:,index)'; % Current Hurricane State At End of Control Period
-    z_total = [z_total;zarray(:,1:index)']; % Store up through the control horizon
-    % Reference Signal Out to the Prediction Horizon MPC controller
-    % calculation
-    ref_signal = [zeros(3,length(zarray(1,2:end)));...
-                  zarray(2,2:end);... % Hurricane Center Position, North
-                  zarray(1,2:end);... % Hurricane Center Position, East
-                  -3000*ones(1,length(zarray(1,2:end)));... % Desired Flight Height
-                  zeros(6,length(zarray(1,2:end)))]';
+    dist_current = ((z_hurr(1)-(end,5))^2+(z_hurr(2)-state(end,4))^2)^.5
+    if dist_current<(hurr_para.Rmax*1000)
+        science_traj = true;
+    end
+    
+
+    
+    
+    if science_traj == false
+%         x_current = x(4:6);
+%         z_all = [z_hurr,x_current'];
+        z_all = [z_hurr,ref_total(end,:)];
+        z = ode45(hurr_prop,tarray,z_all,opts);
+        zarray = deval(z,tarray);
+        index = find(tarray==(c*Ts));
+        z_hurr = zarray(1:3,index)';
+        z_total = [z_total;zarray(1:3,2:index)']; % Store up through the control horizon
+        ref_total = [ref_total;zarray(4:6,2:index)'];
+        ref_signal = [zeros(3,length(zarray(1,2:end)));...
+                      zarray(5,2:end);... % Hurricane Center Position, North
+                      zarray(4,2:end);... % Hurricane Center Position, East
+                      zarray(6,2:end);... % Desired Flight Height
+                      zeros(6,length(zarray(1,2:end)))]';
+    else
+%         x_current = x(1:6);
+%         z_all = [z_hurr,x_current'];
+        z_all = [z_hurr,ref_total(end,:)];
+        z = ode45(hurr_science,tarray,z_all,opts);
+        zarray = deval(z,tarray);
+        index = find(tarray==(c*Ts));
+        z_hurr = zarray(1:3,index)';
+        z_total = [z_total,zarray(1:3,2:index)']; % Store up through the control horizon
+        ref_total = [ref_total;zarray(7:9,2:index)'];
+        ref_signal = [zeros(3,length(zarray(1,2:end)));...
+                      zarray(8,2:end);... % Hurricane Center Position, North
+                      zarray(7,2:end);... % Hurricane Center Position, East
+                      -500*ones(1,length(zarray(1,2:end)));... % Desired Flight Height
+                      zeros(6,length(zarray(1,2:end)))]';
+        
+    end
 
     % Attempt with Simulation Function
     % sim(mpc_obj, 1, ref_signal, [], options)
@@ -379,18 +423,21 @@ end
     %plot(y(:,2), y(:,1)) %Not Fully Observable State Space Model
     plot(state(:,5), state(:,4),'r-.','Linewidth',2)
     hold on
+    plot(ref_total(:,2),ref_total(:,1),'b','Linewidth',2);
     %plot(LQR(:,5), LQR(:,4)) % LQR if we can get it working
-    plot(z_total(:,1), z_total(:,2),'b','Linewidth',2)
+    plot(z_total(:,1), z_total(:,2),'k','Linewidth',2)
     title('Aircraft Trajectory to Hurricane Center')
-    legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
+    legend('Aircraft Trajectory','Reference Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
     ylabel('North [m]')
+    axis equal
      
     figure()
     %plot3(y(:,2), y(:,1), y(:,3)) %Not Fully Observable State Space Model
     plot3(state(:,5), state(:,4), -1*state(:,6),'r-.','Linewidth',2)
     hold on
-    plot3(z_total(:,1), z_total(:,2),3000*ones(length(z_total(:,2)),1),'b','Linewidth',2)
+    plot3(ref_total(:,2),ref_total(:,1),-ref_total(:,3),'b','Linewidth',2);
+    plot3(z_total(:,1), z_total(:,2),3000*ones(length(z_total(:,2)),1),'k','Linewidth',2)
     
     title('Aircraft Trajectory to Hurricane Center')
     legend('Aircraft Trajectory','Hurricane Trajectory','Location','SouthEast')
