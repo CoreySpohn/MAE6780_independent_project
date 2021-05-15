@@ -226,7 +226,7 @@ function xd = SMEoM(t, x)
     % Constants
     Kr = diag([100, 100, 100]);
     Kth = diag([1, 1, 0.001]);
-    L = [0.001 * ones(3,1); 1 * ones(3,1)];
+    L = [0.0001 * ones(3,1); 1 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
