@@ -12,7 +12,7 @@ close all
 	dE =		0;	% Elevator angle, deg
 	dR =		0;		% Rudder angle, deg
 	dF = 		0;		% Flap setting, deg
-	dS = 		-1; %-1;%-1.948;	% Stabilator setting, deg
+	dS = 		-1.948; %-1;%-1.948;	% Stabilator setting, deg
 	dT = 		0.5;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
 	h =			5000;	% Altitude above Sea Level, m
@@ -29,9 +29,9 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			200;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		-500000;		% Initial longitudinal position, m
-	ye = 		0;		% Initial lateral position, m
+	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
+	xe =		200;		% Initial longitudinal position, m
+	ye = 		5000;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
 %	Initial Conditions depending on prior initial conditions
@@ -89,13 +89,13 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 6000;
+    tf = 60;
 
 %   Linearized dynamics (no hurricane)
     global A B
     global hurricane
     hurricane = 0;
-    thresh = 0.1 * ones(19, 1);
+    thresh = 0.1 * ones(19, 1)*;
     xj = [xn0; un];
 	xdotj = LinModel(t0,xj);
 	[dFdX,~] = numjac('LinModel', t0, xj, xdotj, thresh, [], 0);
@@ -110,26 +110,35 @@ close all
     T = linspace(t0, tf, N);
     
 %   Simulate hurricane
-    global hurr_para hurr_Z hurr_T
-    hurr_para.linvel = 0; %m/s
+    global hurr_para hurr_Z hurr_T ref_Z
+    hurr_para.maxVelAircraft = 300;
+    hurr_para.goalaltitude = -5000;
+    hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
     hurr_para.Vmax = 252; %km/hr The units on this are important!
-    hurr_para.Rmax = 47; % km The units on this are important!
+    hurr_para.Rmax = 5;%47; % km The units on this are important!
     hurr_para.xmax = 20000;
     hurr_para.ymax = 20000;
     hurr_para.scalefactor = 100;
 %   Generate Noise
     noise=make_noise(100,100);
     hurr_para.noise = noise;
-    z_hurr = [ 0, 0, deg2rad(45)]; % Initial hurricane conditions
+    z_hurr0 = [0; 0; deg2rad(45); xn0(4); xn0(5); xn0(12)]; % Initial hurricane conditions
 %   North position of center of mass WRT Earth, xe, m
 %	East position of center of mass WRT Earth, ye, m
-%   Angle of Hurricane Path with respect to the Earth Frame's East Axis
+%   Angle of Hurricane Path & Reference Trajectory with respect to the Earth Frame's East Axis
+    HST = @(t,z) HurricaneSensingTrajectoryEOM(t, z, hurr_para);
+    [hurr_T, hurr_out] = ode45(HST, T, z_hurr0);
+    hurr_out_d = zeros(N, 6);
+    for k = 1:N
+       hurr_out_d(k,:) =  HST(hurr_T(k), hurr_out(k,:));
+    end
+    hurr_Z = hurr_out(:,1:3);
+    ref_Z = [hurr_out(:,4:6) hurr_out_d(:,4:6)];
+    
+%   Integrate true motion (yes hurricane)
     global counter
     counter = 0;
-    [hurr_T, hurr_Z] = ode45(@HurricaneEOM, T, z_hurr);
-
-%   Integrate true motion (yes hurricane)
     hurricane = 1;
     [T, Xt] = ode23t(@SMEoM, T, x0);
     
@@ -181,16 +190,16 @@ close all
     Rmax = hurr_para.Rmax*1000; % Convert from km to m
     
     [X,Y] = meshgrid(-500:100:500);
-    for i = 1:length(X(1,:))
+    for k = 1:length(X(1,:))
         for j = 1:length(Y(:,1))
-            r = (X(1,i)^2+Y(j,1)^2)^.5;
+            r = (X(1,k)^2+Y(j,1)^2)^.5;
             if r<Rmax
                Vr = Vmax*(r/Rmax)^(3/2);%Scalar multiplier of the vector field
             else
                 Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
             end
-            dx(j,i) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
-            dy(j,i) = Vr*(-X(1,i));       %/(X.^2+Y.^2));
+            dx(j,k) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
+            dy(j,k) = Vr*(-X(1,k));       %/(X.^2+Y.^2));
         end
     end
     
@@ -223,12 +232,12 @@ function xd = SMEoM(t, x)
 
     % Constants
     Kr = diag([100, 100, 100]);
-    Kth = diag([1, 1, 0.001]);
-    L = [0.0001 * ones(3,1); 1 * ones(3,1)];
+    Kth = diag([0.001, 0.001, 0.001]);
+    L = [1 * ones(3,1); 0.01 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
-    
+ 
     % Sliding-mode control
     global u un
     u = SMC(t, x, xn, un, Kr, Kth, L);
@@ -240,31 +249,16 @@ end
 
 function xn = NomState(t)
 
-    global xn0
-    xn = xn0;
-    H = DCM(xn(10), xn(11), xn(12))';
-    xn(4:6) = xn(4:6) + t * H * xn(1:3);
-
-%     global hurr_Z hurr_T
-% 
-%     z_hurr = interp1(hurr_T, hurr_Z, t, 'spline');
-%     
-%     xn = [zeros(3,1);...
-%                   z_hurr(2);... % Hurricane Center Position, North
-%                   z_hurr(1);... % Hurricane Center Position, East
-%                   -3000;... % Desired Flight Height
-%                   zeros(6,1)];
-
-%     R = 10000;
-%     V = 240;
-%     z = -9000;
-%     th0 = pi;
-%     w = -V/R;
-%     
-%     th = w * t + th0;
-%     
-%     xn = [V; 0; 0; R*cos(th); R*sin(th); z; 0; 0; w; 0; 0; ...
-%           th+sign(w)*(pi/2)];
+    global ref_Z hurr_T hurr_para
     
+    ref_z = interp1(hurr_T, ref_Z, t, 'spline');
+    
+    xn = zeros(12,1);
+    
+    xn(1) = norm(ref_z(4:5));
+    xn(4:5) = ref_z(1:2);
+    xn(6) = hurr_para.goalaltitude;
+    xn(9) = ref_z(6);
+    xn(12) = ref_z(3);
     
 end
