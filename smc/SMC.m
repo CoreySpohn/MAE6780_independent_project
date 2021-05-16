@@ -34,7 +34,7 @@ function usm = SMC(t, x, xn, un, Kr, Kth, L)
     
     counter = counter + 1;
     
-    if mod(counter, 1000) == 0
+    if mod(counter, 100) == 0
         fprintf("t = %f; u = [%f, %f, %f, %f, %f, %f %f]\n", t, ...
             usm(1), usm(2), usm(3), usm(4), usm(5), usm(6), usm(7));
     end
@@ -66,7 +66,7 @@ end
 % Sigmoid function
 function s = sigmoid(z)
 
-   s = (2/pi) * atan(100*z);
+   s = (2/pi) * atan(10*z);
    %s = erf(100 * z);
    
 end

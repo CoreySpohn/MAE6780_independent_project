@@ -12,7 +12,7 @@ close all
 	dE =		0;	% Elevator angle, deg
 	dR =		0;		% Rudder angle, deg
 	dF = 		0;		% Flap setting, deg
-	dS = 		-1.948; %-1;%-1.948;	% Stabilator setting, deg
+	dS = 		-1; %-1;%-1.948;	% Stabilator setting, deg
 	dT = 		0.5;	% Throttle setting, % / 100
 	GEAR = 		0;		% Landing gear DOWN (= 1) or UP (= 0)
 	h =			5000;	% Altitude above Sea Level, m
@@ -29,7 +29,7 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
+	V =			200;	% True Air Speed, TAS, m/s	(relative to air mass)
 	xe =		200;		% Initial longitudinal position, m
 	ye = 		5000;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
@@ -89,13 +89,13 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 60;
+    tf = 120;
 
 %   Linearized dynamics (no hurricane)
     global A B
     global hurricane
     hurricane = 0;
-    thresh = 0.1 * ones(19, 1)*;
+    thresh = 0.1 * ones(19, 1);
     xj = [xn0; un];
 	xdotj = LinModel(t0,xj);
 	[dFdX,~] = numjac('LinModel', t0, xj, xdotj, thresh, [], 0);
@@ -111,7 +111,7 @@ close all
     
 %   Simulate hurricane
     global hurr_para hurr_Z hurr_T ref_Z
-    hurr_para.maxVelAircraft = 300;
+    hurr_para.maxVelAircraft = 175;
     hurr_para.goalaltitude = -5000;
     hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
@@ -186,54 +186,54 @@ close all
 
 %--------------------------------------------------------------------------
 
-    Vmax = hurr_para.Vmax;
-    Rmax = hurr_para.Rmax*1000; % Convert from km to m
-    
-    [X,Y] = meshgrid(-500:100:500);
-    for k = 1:length(X(1,:))
-        for j = 1:length(Y(:,1))
-            r = (X(1,k)^2+Y(j,1)^2)^.5;
-            if r<Rmax
-               Vr = Vmax*(r/Rmax)^(3/2);%Scalar multiplier of the vector field
-            else
-                Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
-            end
-            dx(j,k) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
-            dy(j,k) = Vr*(-X(1,k));       %/(X.^2+Y.^2));
-        end
-    end
-    
-    figure
-    % contour(X,Y,dx,dy)
-    hold on
-    quiver(X,Y,dx,dy,'AutoScaleFactor',1)
-    plot(Xn(:,4)/1000, Xn(:,5)/1000, 'b-', ...
-         Xt(:,4)/1000, Xt(:,5)/1000, 'r:', 'LineWidth', 1.5)
-    legend('Wind','Desired Trajectory', 'Actual Trajectory')
-    hold off
-    axis equal
-    xlabel('x [km]')
-    ylabel('y [km]')
-
-    %PrepFigPresentation(gcf)
-    saveas(gcf, 'sm_hurricane.png')
-    
-    % Plot RPY
-    figure
-    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
-    legend('Roll','Pitch','Yaw','Location','best')
-    xlabel('Time (s)')
-    ylabel('Angle (deg)')
-    saveas(gcf, 'sm_rpy.png')
+%     Vmax = hurr_para.Vmax;
+%     Rmax = hurr_para.Rmax*1000; % Convert from km to m
+%     
+%     [X,Y] = meshgrid(-500:100:500);
+%     for k = 1:length(X(1,:))
+%         for j = 1:length(Y(:,1))
+%             r = (X(1,k)^2+Y(j,1)^2)^.5;
+%             if r<Rmax
+%                Vr = Vmax*(r/Rmax)^(3/2);%Scalar multiplier of the vector field
+%             else
+%                 Vr = Vmax*(2*Rmax*r)/(r^2+Rmax^2);
+%             end
+%             dx(j,k) = Vr*(Y(j,1));        %/(X.^2+Y.^2));
+%             dy(j,k) = Vr*(-X(1,k));       %/(X.^2+Y.^2));
+%         end
+%     end
+%     
+%     figure
+%     % contour(X,Y,dx,dy)
+%     hold on
+%     quiver(X,Y,dx,dy,'AutoScaleFactor',1)
+%     plot(Xn(:,4)/1000, Xn(:,5)/1000, 'b-', ...
+%          Xt(:,4)/1000, Xt(:,5)/1000, 'r:', 'LineWidth', 1.5)
+%     legend('Wind','Desired Trajectory', 'Actual Trajectory')
+%     hold off
+%     axis equal
+%     xlabel('x [km]')
+%     ylabel('y [km]')
+% 
+%     %PrepFigPresentation(gcf)
+%     saveas(gcf, 'sm_hurricane.png')
+%     
+%     % Plot RPY
+%     figure
+%     plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
+%     legend('Roll','Pitch','Yaw','Location','best')
+%     xlabel('Time (s)')
+%     ylabel('Angle (deg)')
+%     saveas(gcf, 'sm_rpy.png')
     
 end
 
 function xd = SMEoM(t, x)
 
     % Constants
-    Kr = diag([100, 100, 100]);
-    Kth = diag([0.001, 0.001, 0.001]);
-    L = [1 * ones(3,1); 0.01 * ones(3,1)];
+    Kr = diag([0.00001, 0.00001, 0.00001]);
+    Kth = diag([0.01, 0.01, 0.01]);
+    L = [1 * ones(3,1); 100 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
@@ -255,7 +255,7 @@ function xn = NomState(t)
     
     xn = zeros(12,1);
     
-    xn(1) = norm(ref_z(4:5));
+    xn(1) = hurr_para.maxVelAircraft/2;
     xn(4:5) = ref_z(1:2);
     xn(6) = hurr_para.goalaltitude;
     xn(9) = ref_z(6);
