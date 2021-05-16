@@ -29,7 +29,7 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			200;	% True Air Speed, TAS, m/s	(relative to air mass)
+	V =			250;	% True Air Speed, TAS, m/s	(relative to air mass)
 	xe =		200;		% Initial longitudinal position, m
 	ye = 		5000;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
@@ -111,7 +111,7 @@ close all
     
 %   Simulate hurricane
     global hurr_para hurr_Z hurr_T ref_Z
-    hurr_para.maxVelAircraft = 175;
+    hurr_para.maxVelAircraft = 400;
     hurr_para.goalaltitude = -5000;
     hurr_para.linvel = 4.9; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
@@ -119,7 +119,7 @@ close all
     hurr_para.Rmax = 5;%47; % km The units on this are important!
     hurr_para.xmax = 20000;
     hurr_para.ymax = 20000;
-    hurr_para.scalefactor = 100;
+    hurr_para.scalefactor = 0;
 %   Generate Noise
     noise=make_noise(100,100);
     hurr_para.noise = noise;
@@ -231,7 +231,7 @@ end
 function xd = SMEoM(t, x)
 
     % Constants
-    Kr = diag([0.00001, 0.00001, 0.00001]);
+    Kr = diag([1000, 1000, 1000]);
     Kth = diag([0.01, 0.01, 0.01]);
     L = [1 * ones(3,1); 100 * ones(3,1)];
     

@@ -66,7 +66,7 @@ end
 % Sigmoid function
 function s = sigmoid(z)
 
-   s = (2/pi) * atan(10*z);
+   s = (2/pi) * atan(100*z);
    %s = erf(100 * z);
    
 end
