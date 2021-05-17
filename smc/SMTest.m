@@ -29,8 +29,8 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			200;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		-500000;		% Initial longitudinal position, m
+	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
+	xe =		-10000;		% Initial longitudinal position, m
 	ye = 		0;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
@@ -89,7 +89,7 @@ close all
         
 %   Initial & final time
     t0 = 0;
-    tf = 6000;
+    tf = 600;
 
 %   Linearized dynamics (no hurricane)
     global A B
@@ -113,11 +113,11 @@ close all
     global hurr_para hurr_Z hurr_T
     hurr_para.linvel = 0; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
-    hurr_para.Vmax = 252; %km/hr The units on this are important!
+    hurr_para.Vmax = 120; %km/hr The units on this are important!
     hurr_para.Rmax = 47; % km The units on this are important!
     hurr_para.xmax = 20000;
     hurr_para.ymax = 20000;
-    hurr_para.scalefactor = 100;
+    hurr_para.scalefactor = 10;
 %   Generate Noise
     noise=make_noise(100,100);
     hurr_para.noise = noise;
@@ -142,10 +142,13 @@ close all
 %   Fullscreen figure for plots
     %figure('units','normalized','outerposition',[0 0 1 1])
     
+    lw = 1.5;
+    
 %   Plot planar motion
     subplot(2, 2, 1)
     plot(Xn(:,4), Xn(:,5), 'b-', Xt(:,4), Xt(:,5), 'r:', ...
-        Xn(1,4), Xn(1,5), 'b*', Xt(1,4), Xt(1,5), 'r*')
+        Xn(1,4), Xn(1,5), 'b*', Xt(1,4), Xt(1,5), 'r*', ...
+        'LineWidth', lw);
     legend('Desired','True','Location','best') 
     xlabel('x (m)')
     ylabel('y (m)')
@@ -153,21 +156,22 @@ close all
     
 %   Plot altitude
     subplot(2, 2, 2)
-    plot(T, -Xn(:,6), 'b-', T, -Xt(:,6), 'r:')
+    plot(T, -Xn(:,6), 'b-', T, -Xt(:,6), 'r:', 'LineWidth', lw)
     legend('Desired','True','Location','best')
     xlabel('Time (s)')
     ylabel('Altitude (m)')
     
 %   Plot velocity
     subplot(2, 2, 3)
-    plot(T, Xn(:,1), 'b-', T, Xt(:,1), 'r:')
+    plot(T, Xn(:,1), 'b-', T, Xt(:,1), 'r:', 'LineWidth', lw)
     legend('Desired','True','Location','best')
     xlabel('Time (s)')
     ylabel('Axial Velocity (m/s)')
     
 %   Plot roll/pitch/yaw
     subplot(2, 2, 4)
-    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
+    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), ...
+        T, rad2deg(Xt(:,12)), 'LineWidth', lw)
     legend('Roll','Pitch','Yaw','Location','best')
     xlabel('Time (s)')
     ylabel('Angle (deg)')
@@ -222,9 +226,9 @@ end
 function xd = SMEoM(t, x)
 
     % Constants
-    Kr = diag([100, 100, 100]);
-    Kth = diag([1, 1, 0.001]);
-    L = [0.0001 * ones(3,1); 1 * ones(3,1)];
+    Kr = diag([1000, 1000, 1000]);
+    Kth = diag([100, 100, 0.0001]);
+    L = [0.01 * ones(3,1); 1 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
