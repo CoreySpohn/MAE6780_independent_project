@@ -181,7 +181,7 @@
     Tstop = 1000; % Total Simulation Time
     Ts = 1; % Sample Time
     p = 40; % Predictive Horizon
-    c = 10; % Control Horizon
+    c = 40; % Control Horizon
     tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
     state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
     control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
@@ -250,18 +250,18 @@
 
     % Output Minimums i.e. We cannot fly into the ground, We cannot fly
     % faster than 400 mph, pitch, roll, and yaw are limited as well
-    mpc_obj.OV(1).Max = 175; % maximum axial velocity, 400 mph = 175 m/s
+    mpc_obj.OV(1).MaxECR < 175; % maximum axial velocity, 400 mph = 175 m/s
     hurr_para.maxVelAircraft = 175;
-    mpc_obj.OV(1).Min = 0;
+    mpc_obj.OV(1).MinECR > 0;
     mpc_obj.OV(1).ScaleFactor = 100;
-    mpc_obj.OV(2).Max = 10; % maximum velocity, 400 mph = 175 m/s
-    mpc_obj.OV(2).Min = -10;
+%     mpc_obj.OV(2).MaxECR = 10; % maximum velocity, 400 mph = 175 m/s
+%     mpc_obj.OV(2).MinECR = -10;
     mpc_obj.OV(2).ScaleFactor = 10;
     mpc_obj.OV(3).ScaleFactor = 10;
     mpc_obj.OV(4).ScaleFactor = 5;
     mpc_obj.OV(5).ScaleFactor = 100;
-    mpc_obj.OV(6).Max = 0; % meter, maximum operational range
-    mpc_obj.OV(6).Min = -10000;
+    mpc_obj.OV(6).MaxECR < 0; % meter, maximum operational range
+    mpc_obj.OV(6).MinECR > -10000;
     hurr_para.goalaltitude = -5000;
     mpc_obj.OV(6).ScaleFactor = 100;
 %     mpc_obj.OV(7).ScaleFactor = 1;
@@ -270,16 +270,13 @@
     mpc_obj.OV(10).ScaleFactor = 10;
 %     mpc_obj.OV(11).ScaleFactor = 1;
     mpc_obj.OV(12).ScaleFactor = 10;
-    mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
-    mpc_obj.OV(10).Min = -3*pi/2;
-    mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
-%     mpc_obj.OV(11).Max = pi/8; % Pitch rad, the plane cannot flip over the minor axis
-    mpc_obj.OV(11).Min = -pi/2;
-%     mpc_obj.OV(11).Min = -pi/8;
-    mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
-    mpc_obj.OV(12).Min = -0.5236;
-%     mpc_obj.OV(12).Max = pi/800; % Yaw rad, the plane will not spin
-%     mpc_obj.OV(12).Min = -pi/800;
+    mpc_obj.OV(10).MaxECR < 3*pi/2; % Roll rad, large plane will not barrel roll
+    mpc_obj.OV(10).MinECR > -3*pi/2;
+    mpc_obj.OV(11).MaxECR < 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
+    mpc_obj.OV(11).MinECR > -pi/2;
+    mpc_obj.OV(12).MaxECR < 0.5236; % Yaw rad, the plane will not spin
+    mpc_obj.OV(12).MinECR > -0.5236;
+
     
 %     mpc_refsignal = zeros(11, 7);
 %     if i == 1
@@ -339,7 +336,7 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
     mod1 = windb(1)*tf([1],[1 0]);
     mod2 = windb(2)*tf([1],[1 0]);
     mod3 = windb(3)*tf([1],[1 0]);
-    mod_comb = eye(3)*[mod1;mod2;mod3];
+    mod_comb = [eye(3)*[mod1;mod2;mod3],zeros(3,9)];
     setindist(mpc_obj,'model',mod_comb);
 
 %     % Add the Unmeasured Disturbance Going into Plant
