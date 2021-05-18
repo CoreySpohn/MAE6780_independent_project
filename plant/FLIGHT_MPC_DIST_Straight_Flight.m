@@ -80,8 +80,8 @@
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		0;		% Trim flag (= 1 to calculate trim)
 	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		5000;		% Initial longitudinal position, m
-	ye = 		5000;		% Initial lateral position, m
+	xe =		0;		% Initial longitudinal position, m
+	ye = 		-50000;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
 %	Initial Conditions depending on prior initial conditions
@@ -176,12 +176,12 @@
 				x(12)]
 		format short
     end
-    
+
 %   Start of the Iterative Loop
-    Tstop = 100; % Total Simulation Time
+    Tstop = 500; % Total Simulation Time
     Ts = 1; % Sample Time
-    p = 10; % Predictive Horizon
-    c = 2; % Control Horizon
+    p = 50; % Predictive Horizon
+    c = 50; % Control Horizon
     tarray = (0:Ts:p*Ts); % Need to simulate hurricane through the predictive horizon each loop
     state = x'; % Set up variable to contain the state variable after each loop, put nominal in to start
     control = [0, 0, 0, 250, 0, 0, 0]; % Set up variable to contain the control variables after each loop
@@ -256,6 +256,7 @@
 %     % Output Minimums i.e. We cannot fly into the ground, We cannot fly
 %     % faster than 400 mph, pitch, roll, and yaw are limited as well
     mpc_obj.OV(1).Max = 500; % maximum axial velocity, 400 mph = 175 m/s
+    mpc_obj.OV(1).MaxECR = 1;
     hurr_para.maxVelAircraft = 175;
     mpc_obj.OV(1).Min = 0;
 %     mpc_obj.OV(1).MaxECR = 0.1;
@@ -278,12 +279,18 @@
 %     mpc_obj.OV(10).ScaleFactor = 10;
 % %     mpc_obj.OV(11).ScaleFactor = 1;
 %     mpc_obj.OV(12).ScaleFactor = 10;
-%     mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
-%     mpc_obj.OV(10).Min = -3*pi/2;
-%     mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
-%     mpc_obj.OV(11).Min = -pi/2;
-%     mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
-%     mpc_obj.OV(12).Min = -0.5236;
+    mpc_obj.OV(10).Max = 3*pi/2; % Roll rad, large plane will not barrel roll
+    mpc_obj.OV(10).Min = -3*pi/2;
+    mpc_obj.OV(10).MaxECR = 0;
+    mpc_obj.OV(10).MinECR = 0;
+    mpc_obj.OV(11).Max = 3*pi/8; % Pitch rad, the plane cannot flip over the minor axis
+    mpc_obj.OV(11).Min = -pi/2;
+    mpc_obj.OV(11).MaxECR = 0;
+    mpc_obj.OV(11).MinECR = 0;
+    mpc_obj.OV(12).Max = 0.5236; % Yaw rad, the plane will not spin
+    mpc_obj.OV(12).Min = -0.5236;
+    mpc_obj.OV(12).MaxECR = 0;
+    mpc_obj.OV(12).MinECR = 0;
 
     
 %     mpc_refsignal = zeros(11, 7);
@@ -339,7 +346,7 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
 %     y_mpcmove = C*x+D*u;
     
     % Calculate the Current Wind Disturbances
-	windb	=	HurricaneWindField(x,z_hurr,hurr_para)
+	windb	=	HurricaneWindField(x,z_hurr,hurr_para);
 
     mod1 = windb(1)*tf([1],[1 0]);
     mod2 = windb(2)*tf([1],[1 0]);
@@ -359,7 +366,7 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
 %   Huricane Modeling
     % Run an ODE 45 Solver to calculate the hurricane trjectory over the
     % current control horizon  
-     
+
     zarray = [ref_total(end,1)*ones(1,Ts*p);...
                 linspace(ref_total(end,2),ref_total(end,2)+200*p*Ts,p*Ts);...
                 ref_total(end,3)*ones(1,Ts*p)];
@@ -380,7 +387,7 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
     [y, t, u_t, xp, xc, output_options] = sim(mpc_obj, p+1, ref_signal, [], options);
     index = find(t==(c*Ts));
     u = u_t(index,:)';
-    x = y(index,:)'
+    x = y(index,:)';
 %     x = Fmodel*x+Gmodel*u;
     state = [state;y(2:index,:)];
     control = [control;u_t(2:index,:)];
@@ -392,10 +399,51 @@ for i = 1:round(Tstop/c) % Number of Iterations if using Sim
 %     state = [state;Info.Xopt(1:index,1:12)];
 %     control = [control;u'];
 end
-    
+
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
 %     LQR = sim(LQR_sys,zeros(length(tarray),7),tarray,[0, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0]')
+
+%% Quiver plot vals
+east_vals = -500000:50000:500000;
+north_vals = -500000:50000:500000;
+[X, Y, U, V] = HurricaneQuiver(east_vals, north_vals, z_hurr, hurr_para);
+
+%% Adapting the stuff from SMC stuff
+t_control = linspace(0,Tstop,length(control(:,1)))';
+ref_t = linspace(0, Tstop, length(ref_total));
+ref_v = 300*ones(length(ref_total),1);
+%   Plot planar motion
+    subplot(2, 2, 1)
+    plot(ref_total(:,2), ref_total(:,1), 'b-', state(:,5), state(:,4), 'r:', ...
+        ref_total(1,2), ref_total(1,1), 'b*', state(1,5), state(1,4), 'r*', 'LineWidth',3)
+    legend('Desired','True','Location','best') 
+    xlabel('x (m)')
+    ylabel('y (m)')
+    axis equal
+
+%   Plot altitude
+    subplot(2, 2, 2)
+    plot(ref_t, -ref_total(:,3), 'b-', t_control, -state(:,6), 'r:', 'LineWidth',3)
+    legend('Desired','True','Location','best')
+    xlabel('Time (s)')
+    ylabel('Altitude (m)')
+
+%   Plot velocity
+    subplot(2, 2, 3)
+    plot(ref_t, ref_v(:,1), 'b-', t_control, state(:,1), 'r:', 'LineWidth',3)
+    legend('Desired','True','Location','best')
+    xlabel('Time (s)')
+    ylabel('Axial Velocity (m/s)')
     
+%   Plot roll/pitch/yaw
+    subplot(2, 2, 4)
+    plot(t_control, state(:,10), t_control, state(:,11), t_control, state(:,12), 'LineWidth',3)
+    legend('Roll','Pitch','Yaw','Location','best')
+    xlabel('Time (s)')
+    ylabel('Angle (deg)')
+    
+%   Save plots
+    saveas(gcf, 'mpc_flight.png')
 %%
     % East vs North
     figure()
@@ -405,12 +453,17 @@ end
     plot(ref_total(:,2),ref_total(:,1),'b','Linewidth',2);
     %plot(LQR(:,5), LQR(:,4)) % LQR if we can get it working
     plot(z_total(:,1), z_total(:,2),'k','Linewidth',2)
+    quiver(X, Y, U, V)
+    xticks([-500000:10000:500000])
+    yticks([-500000:10000:500000])
+    xlim([-500000 500000])
+    ylim([-500000 500000])
     title('Aircraft Trajectory to Hurricane Center')
     legend('Aircraft Trajectory','Reference Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
     ylabel('North [m]')
-    axis equal
-     
+%     axis equal
+
     figure()
     %plot3(y(:,2), y(:,1), y(:,3)) %Not Fully Observable State Space Model
     plot3(state(:,5), state(:,4), -1*state(:,6),'r-.','Linewidth',2)
@@ -555,4 +608,4 @@ end
 		plot(x(:,9) * 57.29578,x(:,8) * 57.29578)
 		xlabel('Yaw Rate, deg/s'), ylabel('Pitch Rate, deg/s'), grid
 		
-	end
+    end
