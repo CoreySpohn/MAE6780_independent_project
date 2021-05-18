@@ -414,7 +414,12 @@ end
     
 %     LQR_sys = ss(Fmodel-Gmodel*K1, Gmodel, C, D);
 %     LQR = sim(LQR_sys,zeros(length(tarray),7),tarray,[0, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0]')
-    
+
+%% Generate the windfield for the quiver plot
+east_vals = -5000:500:20000;
+north_vals = 0:500:20000;
+[X, Y, U, V] = HurricaneQuiver(east_vals, north_vals, z_hurr, hurr_para);
+
 %%
     % East vs North
     figure()
@@ -424,6 +429,7 @@ end
     plot(ref_total(:,2),ref_total(:,1),'b','Linewidth',2);
     %plot(LQR(:,5), LQR(:,4)) % LQR if we can get it working
     plot(z_total(:,1), z_total(:,2),'k','Linewidth',2)
+    quiver(X, Y, U, V)
     title('Aircraft Trajectory to Hurricane Center')
     legend('Aircraft Trajectory','Reference Trajectory','Hurricane Trajectory','Location','SouthEast')
     xlabel('East [m]')
