@@ -20,7 +20,7 @@ close all
 	LINEAR = 	0;		% Linear model flag (= 1 to calculate F and G)
 	p =			0;		% Body-axis roll rate, deg/s
 	phi =		0;		% Body roll angle wrt earth, deg
-	psi =		0;		% Body yaw angle wrt earth, deg
+	psi =		90;		% Body yaw angle wrt earth, deg
 	q	=		0;		% Body-axis pitch rate, deg/sec
 	r =			0;		% Body-axis yaw rate, deg/s
 	SIMUL =		1;		% Flight path flag (= 1 for nonlinear simulation)
@@ -29,9 +29,9 @@ close all
 	ti = 		0;		% Initial time, sec
 	theta =		alpha;	% Body pitch angle wrt earth, deg
 	TRIM = 		1;		% Trim flag (= 1 to calculate trim)
-	V =			250;	% True Air Speed, TAS, m/s	(relative to air mass)
-	xe =		200;		% Initial longitudinal position, m
-	ye = 		5000;		% Initial lateral position, m
+	V =			240;	% True Air Speed, TAS, m/s	(relative to air mass)
+	xe =		5000;		% Initial longitudinal position, m
+	ye = 		0;		% Initial lateral position, m
 	ze = 		-h;		% Initial vertical position, m
 		
 %	Initial Conditions depending on prior initial conditions
@@ -111,19 +111,19 @@ close all
     
 %   Simulate hurricane
     global hurr_para hurr_Z hurr_T ref_Z
-    hurr_para.maxVelAircraft = 400;
+    hurr_para.maxVelAircraft = 480;
     hurr_para.goalaltitude = -5000;
-    hurr_para.linvel = 4.9; %m/s
+    hurr_para.linvel = 0; %m/s
     hurr_para.angvel = 0; % rad/s % This will be a very small number, but it will cause the hurricane path to arc
-    hurr_para.Vmax = 252; %km/hr The units on this are important!
+    hurr_para.Vmax = 120; %km/hr The units on this are important!
     hurr_para.Rmax = 5;%47; % km The units on this are important!
     hurr_para.xmax = 20000;
     hurr_para.ymax = 20000;
-    hurr_para.scalefactor = 0;
+    hurr_para.scalefactor = 10;
 %   Generate Noise
     noise=make_noise(100,100);
     hurr_para.noise = noise;
-    z_hurr0 = [0; 0; deg2rad(45); xn0(4); xn0(5); xn0(12)]; % Initial hurricane conditions
+    z_hurr0 = [5000; 10000; 0; xn0(4); xn0(5); xn0(12)]; % Initial hurricane conditions
 %   North position of center of mass WRT Earth, xe, m
 %	East position of center of mass WRT Earth, ye, m
 %   Angle of Hurricane Path & Reference Trajectory with respect to the Earth Frame's East Axis
@@ -148,36 +148,37 @@ close all
         Xn(k,:) = NomState(T(k))';
     end
     
-%   Fullscreen figure for plots
-    %figure('units','normalized','outerposition',[0 0 1 1])
+    lw = 1.5;
     
 %   Plot planar motion
     subplot(2, 2, 1)
     plot(Xn(:,4), Xn(:,5), 'b-', Xt(:,4), Xt(:,5), 'r:', ...
-        Xn(1,4), Xn(1,5), 'b*', Xt(1,4), Xt(1,5), 'r*')
-    legend('Desired','True','Location','best') 
+        Xn(1,4), Xn(1,5), 'b*', Xt(1,4), Xt(1,5), 'r*', ...
+        'LineWidth', lw);
+    legend('Desired','True') 
     xlabel('x (m)')
     ylabel('y (m)')
     axis equal
     
 %   Plot altitude
     subplot(2, 2, 2)
-    plot(T, -Xn(:,6), 'b-', T, -Xt(:,6), 'r:')
+    plot(T, -Xn(:,6), 'b-', T, -Xt(:,6), 'r:', 'LineWidth', lw)
     legend('Desired','True','Location','best')
     xlabel('Time (s)')
     ylabel('Altitude (m)')
     
 %   Plot velocity
     subplot(2, 2, 3)
-    plot(T, Xn(:,1), 'b-', T, Xt(:,1), 'r:')
-    legend('Desired','True','Location','best')
+    plot(T, Xn(:,1), 'b-', T, Xt(:,1), 'r:', 'LineWidth', lw)
+    legend('Desired','True')
     xlabel('Time (s)')
     ylabel('Axial Velocity (m/s)')
     
 %   Plot roll/pitch/yaw
     subplot(2, 2, 4)
-    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), T, rad2deg(Xt(:,12)))
-    legend('Roll','Pitch','Yaw','Location','best')
+    plot(T, rad2deg(Xt(:,10)), T, rad2deg(Xt(:,11)), ...
+        T, rad2deg(Xt(:,12)), 'LineWidth', lw)
+    legend('Roll','Pitch','Yaw')
     xlabel('Time (s)')
     ylabel('Angle (deg)')
 
@@ -232,8 +233,8 @@ function xd = SMEoM(t, x)
 
     % Constants
     Kr = diag([1000, 1000, 1000]);
-    Kth = diag([0.01, 0.01, 0.01]);
-    L = [1 * ones(3,1); 100 * ones(3,1)];
+    Kth = diag([100, 100, 0.0001]);
+    L = [0.01 * ones(3,1); 1 * ones(3,1)];
     
     % Nominal state
     xn = NomState(t);
